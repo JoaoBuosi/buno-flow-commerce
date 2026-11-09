@@ -39,3 +39,16 @@ jobs:
           cache: maven
           cache-dependency-path: 02-buno-flow-commerce/pom.xml
       - run: mvn -B clean verify
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 02-buno-flow-commerce/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
