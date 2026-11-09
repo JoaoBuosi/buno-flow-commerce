@@ -5,6 +5,10 @@ on:
     paths:
       - '02-buno-flow-commerce/ml/**'
       - '.github/workflows/flow-ml.yml'
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/ml/**'
+      - '.github/workflows/flow-ml.yml'
   workflow_dispatch:
 permissions:
   contents: read
