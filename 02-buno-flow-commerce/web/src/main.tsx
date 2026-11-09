@@ -8,8 +8,9 @@ type StoreProfile={id:string;name:string;created_at:string};
 type Forecast={sku:string;weekStart:string;status:string;predictedUnits:number|null;method:string;message:string;unitsLast8FullWeeks:number;activeWeeksLast8:number;modelLimitations?:string};
 // Live staging refuses to send credentials unless the Java API has a configured HTTPS endpoint.
 const configuredApi = String(import.meta.env.VITE_API_URL || "").trim();
-const apiReady = import.meta.env.DEV || /^https:\/\/[^\s]+\/api\/v1\/?$/.test(configuredApi);
-const base=(configuredApi || (import.meta.env.DEV ? "http://localhost:8102/api/v1" : "")).replace(/\/$/,"");
+const sameOrigin = configuredApi === "same-origin" && !import.meta.env.DEV;
+const apiReady = import.meta.env.DEV || sameOrigin || /^https:\/\/[^\s]+\/api\/v1\/?$/.test(configuredApi);
+const base=(sameOrigin ? window.location.origin + "/api/v1" : (configuredApi || (import.meta.env.DEV ? "http://localhost:8102/api/v1" : ""))).replace(/\/$/,"");
 const money=(v:number)=>Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const labels:Record<string,string>={CREATED:"Criado",PAID:"Pago",PROCESSING:"Em separação",SHIPPED:"Enviado",DELIVERED:"Entregue",CANCELED:"Cancelado"};
 const next:Record<string,string>={CREATED:"PAID",PAID:"PROCESSING",PROCESSING:"SHIPPED",SHIPPED:"DELIVERED"};
