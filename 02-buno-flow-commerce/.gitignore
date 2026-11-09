@@ -11,3 +11,7 @@ ml/artifacts/
 *.dump
 *.backup
 *.log
+
+web/*.tsbuildinfo
+web/test-results/
+web/playwright-report/
