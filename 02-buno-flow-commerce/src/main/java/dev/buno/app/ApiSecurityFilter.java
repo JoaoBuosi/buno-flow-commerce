@@ -46,7 +46,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
       if(loginAttempts.size()>10_000) loginAttempts.entrySet().removeIf(e->now-e.getValue().since>WINDOW_MS);
     }
     // A malformed or absent auth header must be rejected before Spring dispatches a handler.
-    if(path.startsWith("/api/v1/") && !path.startsWith("/api/v1/auth/") &&
+    if(path.startsWith("/api/v1/") && !path.equals("/api/v1/auth/login") && !path.equals("/api/v1/auth/register") &&
        !"OPTIONS".equals(method)){
       String header=req.getHeader("Authorization");
       String store=req.getHeader("X-Store-Id");
