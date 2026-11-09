@@ -137,6 +137,22 @@ class CommerceIntegrationTest {
       .header("Authorization","Bearer "+owner.token()).header("X-Store-Id",owner.store()))
       .andExpect(status().isUnauthorized());
   }
+  @Test void orderCsvExportCannotReadAnotherStore() throws Exception {
+    Identity a=register(),b=register();
+    create(a);
+    var exportA=mvc.perform(get("/api/v1/orders/export")
+      .header("Authorization","Bearer "+a.token())
+      .header("X-Store-Id",a.store()))
+      .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+    var exportB=mvc.perform(get("/api/v1/orders/export")
+      .header("Authorization","Bearer "+b.token())
+      .header("X-Store-Id",b.store()))
+      .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+    assertTrue(exportA.contains("SKU-1"));
+    assertFalse(exportB.contains("SKU-1"));
+    assertEquals("'=1+1",OrderExportService.safe("=1+1"));
+  }
+
   @Test void unauthenticatedRequestsAreRejected() throws Exception {
     mvc.perform(get("/api/v1/orders")).andExpect(status().isUnauthorized());
   }
