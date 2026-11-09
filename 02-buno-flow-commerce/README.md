@@ -21,11 +21,15 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8102/api/v1/orders -Headers
 Invoke-RestMethod -Uri http://localhost:8102/api/v1/orders -Headers $headers
 ```
 
+## Importação CSV
+Envie multipart/form-data com campo file, autenticação e cabeçalho de loja para POST /api/v1/orders/import. Cabeçalho: order_key,customer,sku,description,quantity,price. Linhas agrupadas por order_key. Toda a operação reverte em caso de erros ou duplicatas. Máximo de 500 linhas e 1 MB.
+
 ## Endpoints
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/me`
+- `POST /api/v1/orders/import` — CSV com chave externa única por loja
 - `POST /api/v1/orders`
 - `GET /api/v1/orders?page=0&size=20&status=CREATED`
 - `GET /api/v1/orders/{id}`
@@ -46,7 +50,7 @@ A suíte de integração espera PostgreSQL real com um banco `orders_test` isola
 
 ## Limites atuais
 - Ainda não há recuperação de senha ou gestão de funcionários.
-- Importação CSV da demo ainda não está conectada à API.
+- CSV possui endpoint transacional; frontend React deve utilizá-lo.
 - Sem gateway de pagamento, envio WhatsApp ou marketplace.
 - Sem teste de reinicialização comprovado e sem revisão de segurança para produção.
 - O repositório contém código legado desativado; verificar migrations com base de dados anterior antes de atualizar instâncias existentes.
