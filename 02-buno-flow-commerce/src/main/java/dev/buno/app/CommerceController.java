@@ -18,7 +18,8 @@ public class CommerceController {
   private final OrderImportService imports;
   private final DemandInsights insights;
   private final StoreProfileService storeProfiles;
-  public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports,DemandInsights insights,StoreProfileService storeProfiles){this.auth=auth;this.orders=orders;this.imports=imports;this.insights=insights;this.storeProfiles=storeProfiles;}
+  private final OrderExportService exports;
+  public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports,DemandInsights insights,StoreProfileService storeProfiles,OrderExportService exports){this.auth=auth;this.orders=orders;this.imports=imports;this.insights=insights;this.storeProfiles=storeProfiles;this.exports=exports;}
   public record Register(String email,String password,String storeName){}
   public record Login(String email,String password){}
   @PostMapping("/auth/register")
@@ -52,6 +53,16 @@ public class CommerceController {
   public Map<String,Object> create(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,@RequestBody OrderStore.Create body){return orders.create(who(token,store),body);}
   @PostMapping(value="/orders/import", consumes="multipart/form-data")
   public OrderImportService.Result importCsv(@RequestHeader("Authorization") String token,@RequestHeader("X-Store-Id") String store,@RequestParam("file") org.springframework.web.multipart.MultipartFile file){return imports.importCsv(who(token,store),file);}
+  @GetMapping(value="/orders/export", produces="text/csv")
+  public org.springframework.http.ResponseEntity<byte[]> exportOrders(
+      @RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store){
+    byte[] data=exports.export(who(token,store));
+    return org.springframework.http.ResponseEntity.ok()
+      .header("Content-Disposition","attachment; filename=flow-commerce-orders.csv")
+      .header("Cache-Control","no-store")
+      .contentType(org.springframework.http.MediaType.parseMediaType("text/csv; charset=UTF-8"))
+      .body(data);
+  }
   @GetMapping("/insights/demand")
   public Map<String,Object> skuDemand(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,@RequestParam String sku){return insights.forecast(who(token,store),sku);}
   @GetMapping("/orders")
