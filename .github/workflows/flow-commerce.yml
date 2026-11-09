@@ -1,0 +1,41 @@
+name: Flow Commerce backend integration
+on:
+  push:
+    branches: [feat/commerce-saas-mvp]
+  pull_request:
+    paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce.yml']
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: orders_test
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: local-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d orders_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: 02-buno-flow-commerce
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/orders_test
+      SPRING_DATASOURCE_USERNAME: app
+      SPRING_DATASOURCE_PASSWORD: local-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: 02-buno-flow-commerce/pom.xml
+      - run: mvn -B clean verify
