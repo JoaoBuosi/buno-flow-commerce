@@ -1,7 +1,7 @@
 # Flow Commerce — Supabase PostgreSQL dedicado (staging privado)
 
 **Supabase project:** `buno-flow-commerce` — ref `pqdwxihinbmeiorkqdtq`, região `us-east-1`.
-**Status 09/11/2026:** Projeto criado pelo proprietário; V1–V3 aplicadas com sucesso usando o conector Supabase. Sem dados de clientes. O backend **ainda não foi implantado e conectado remotamente**.
+**Status 09/11/2026:** Projeto criado pelo proprietário; V1–V3 aplicadas com sucesso usando o conector Supabase; V4 (índices de chaves estrangeiras) também aplicada. Sem dados de clientes. O backend **ainda não foi implantado e conectado remotamente**.
 
 ## Esquema de dados
 
@@ -31,7 +31,7 @@ COMMERCE_MAIL_ENABLED=false
 
 Não há senha real neste arquivo e **não enviar esses segredos pelo chat**. Usar conexão com criptografia TLS e credenciais de banco com acesso mínimo possível ao schema. Revisar o usuário PostgreSQL antes de produção: `postgres` tem privilégios amplos e não deve ser a identidade de longo prazo da API.
 
-**Flyway:** o perfil `supabase` usa `baseline-on-migrate=true` e `baseline-version=3` exclusivamente porque o Supabase foi inicializado fora do Flyway. Na primeira partida da API nesse projeto, o Flyway marca V1–V3 como baseline no schema existente. V4+ rodarão normalmente em cada deploy. **Nunca apagar `flyway_schema_history`, não rodar V1–V3 novamente nesse projeto e não habilitar o perfil `supabase` em DB desconhecido.**
+**Flyway:** o perfil `supabase` usa `baseline-on-migrate=true` e `baseline-version=3` exclusivamente porque o Supabase foi inicializado fora do Flyway. Na primeira partida da API nesse projeto, o Flyway marca V1–V3 como baseline no schema existente. V4 é idempotente e já aplicada via Supabase, então ao rodar pelo Flyway registrará a versão sem duplicar índices. V5+ será gerenciada por Flyway no backend. **Nunca apagar `flyway_schema_history`, não rodar V1–V3 novamente nesse projeto e não habilitar o perfil `supabase` em DB desconhecido.**
 
 Nos testes locais/CI, o perfil Supabase **não** é usado: Flyway executa V1–V3 do zero e o PostgreSQL fica isolado.
 
