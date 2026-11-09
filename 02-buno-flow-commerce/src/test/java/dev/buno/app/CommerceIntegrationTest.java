@@ -186,6 +186,40 @@ class CommerceIntegrationTest {
       .andExpect(status().isOk()).andExpect(jsonPath("$.order_count").value(0));
   }
 
+
+  @Test void resetLinkCanOnlyBeUsedOnceAndRevokesAllSessions() throws Exception {
+    Identity user=register();
+    String digest=java.util.HexFormat.of().formatHex(
+      java.security.MessageDigest.getInstance("SHA-256")
+      .digest(user.token().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    UUID userId=verificationDb.queryForObject(
+      "SELECT user_id FROM user_sessions WHERE token_hash=?",UUID.class,digest);
+    String resetToken="a".repeat(64);
+    String resetDigest=java.util.HexFormat.of().formatHex(
+      java.security.MessageDigest.getInstance("SHA-256")
+      .digest(resetToken.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    verificationDb.update("""
+      INSERT INTO password_resets(token_hash,user_id,expires_at)
+      VALUES(?,?,now()+interval '15 minutes')
+    """,resetDigest,userId);
+    String body=json.writeValueAsString(Map.of(
+      "token",resetToken,"newPassword","new-correct-password-2026"));
+    mvc.perform(post("/api/v1/auth/reset/complete")
+      .contentType(MediaType.APPLICATION_JSON).content(body))
+      .andExpect(status().isNoContent());
+    mvc.perform(post("/api/v1/auth/reset/complete")
+      .contentType(MediaType.APPLICATION_JSON).content(body))
+      .andExpect(status().isBadRequest());
+    mvc.perform(get("/api/v1/orders")
+      .header("Authorization","Bearer "+user.token())
+      .header("X-Store-Id",user.store()))
+      .andExpect(status().isUnauthorized());
+    mvc.perform(post("/api/v1/auth/reset/request")
+      .contentType(MediaType.APPLICATION_JSON)
+      .content(json.writeValueAsString(Map.of("email","someone@example.test"))))
+      .andExpect(status().isServiceUnavailable());
+  }
+
   @Test void unauthenticatedRequestsAreRejected() throws Exception {
     mvc.perform(get("/api/v1/orders")).andExpect(status().isUnauthorized());
   }
