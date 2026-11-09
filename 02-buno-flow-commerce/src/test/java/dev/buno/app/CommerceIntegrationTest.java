@@ -92,6 +92,27 @@ class CommerceIntegrationTest {
       .header("X-Store-Id",user.store())).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
   }
 
+  @Test void forecastingIsScopedAndDoesNotInventSparsePredictions() throws Exception {
+    Identity storeA=register(),storeB=register();
+    String aId=create(storeA);
+    mvc.perform(patch("/api/v1/orders/"+aId+"/status")
+      .header("Authorization","Bearer "+storeA.token())
+      .header("X-Store-Id",storeA.store()).contentType(MediaType.APPLICATION_JSON)
+      .content("{\\"status\\":\\"PAID\\"}")).andExpect(status().isOk());
+    mvc.perform(get("/api/v1/insights/demand").param("sku","SKU-1")
+      .header("Authorization","Bearer "+storeA.token())
+      .header("X-Store-Id",storeA.store()))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("INSUFFICIENT_HISTORY"))
+      .andExpect(jsonPath("$.predictedUnits").doesNotExist());
+    mvc.perform(get("/api/v1/insights/demand").param("sku","SKU-1")
+      .header("Authorization","Bearer "+storeB.token())
+      .header("X-Store-Id",storeB.store()))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.unitsLast8FullWeeks").value(0));
+    mvc.perform(get("/api/v1/insights/demand").param("sku","SKU-1")
+      .header("Authorization","Bearer "+storeA.token())
+      .header("X-Store-Id",storeB.store())).andExpect(status().isUnauthorized());
+  }
+
   @Test void unauthenticatedRequestsAreRejected() throws Exception {
     mvc.perform(get("/api/v1/orders")).andExpect(status().isBadRequest());
   }
