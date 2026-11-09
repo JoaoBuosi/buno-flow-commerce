@@ -32,6 +32,7 @@ function App(){
  const [inviteCode,setInviteCode]=useState("");
  const [email,setEmail]=useState("");const[password,setPassword]=useState("");const[shop,setShop]=useState("");
  const [orders,setOrders]=useState<Order[]>([]);
+ const [latestOrders,setLatestOrders]=useState<Order[]>([]);
  const [orderPage,setOrderPage]=useState(0),[resultCount,setResultCount]=useState(0);
  const [dashboard,setDashboard]=useState<Dashboard|null>(null);const[selected,setSelected]=useState<Order|null>(null);
  const [skuQuery,setSkuQuery]=useState("");const [forecast,setForecast]=useState<Forecast|null>(null);
@@ -71,13 +72,14 @@ function App(){
      const filters=new URLSearchParams();
      if(q.trim())filters.set("search",q.trim());
      if(f)filters.set("status",f);
-     const [rows,count,kpis]=await Promise.all([
+     const [rows,count,kpis,latest]=await Promise.all([
        call("/orders?"+query.toString(),"GET",undefined,s),
        call("/orders/count?"+filters.toString(),"GET",undefined,s),
-       call("/dashboard","GET",undefined,s)
+       call("/dashboard","GET",undefined,s),
+       call("/orders?page=0&size=5","GET",undefined,s)
      ]);
      if(sequence!==requestId.current)return;
-     setOrders(rows);setResultCount(Number(count.total));setDashboard(kpis);
+     setOrders(rows);setResultCount(Number(count.total));setDashboard(kpis);setLatestOrders(latest);
    }catch(e){if(sequence===requestId.current){setOrdersError((e as Error).message);setNotice((e as Error).message)}}
    finally{if(sequence===requestId.current)setLoading(false)}
  }
@@ -101,7 +103,7 @@ function App(){
  async function exportOrders(){if(!session)return;setLoading(true);try{const r=await fetch(base+"/orders/export",{headers:{"Authorization":"Bearer "+session.accessToken,"X-Store-Id":session.storeId}});if(!r.ok)throw new Error("Falha na exportação: HTTP "+r.status);const blob=await r.blob(),url=URL.createObjectURL(blob),anchor=document.createElement("a");anchor.href=url;anchor.download="flow-commerce-orders.csv";anchor.click();URL.revokeObjectURL(url);setNotice("Exportação CSV gerada")}catch(e){setNotice((e as Error).message)}finally{setLoading(false)}}
  async function importCsv(file:File){
   if(!session)return;
-  setImportResult(null);
+  setImportResult(null);setOrdersError("");
   setLoading(true);
   try{
     if(!file.name.toLowerCase().endsWith(".csv"))throw new Error("Selecione um arquivo .csv.");
@@ -139,7 +141,7 @@ function App(){
    await inspect(selected.id);await refresh();
   }catch(e){setNotice((e as Error).message)}finally{setLoading(false)}
  }
- async function logout(){try{await call("/auth/logout","POST")}catch{}setSession(null);setAuthMode("login");setSelected(null);setOrders([]);setEvents([]);setDashboard(null);setCurrentUser(null);setNotice("");setImportResult(null);window.history.replaceState(null,"","/");setPage("dashboard")}
+ async function logout(){try{await call("/auth/logout","POST")}catch{}setSession(null);setAuthMode("login");setSelected(null);setOrders([]);setLatestOrders([]);setEvents([]);setDashboard(null);setCurrentUser(null);setNotice("");setImportResult(null);window.history.replaceState(null,"","/");setPage("dashboard")}
  useEffect(()=>{if(!session)return;const timer=window.setTimeout(()=>{void refresh(session)},250);return()=>window.clearTimeout(timer)},[session,orderPage,search,status]);
  useEffect(()=>{setOrderPage(0)},[search,status]);
  useEffect(()=>{if(page==="settings"&&session)void loadStore()},[page,session]);
@@ -165,7 +167,7 @@ function App(){
   <header className="topBar"><div className="inline"><button className="secondary mobileToggle" onClick={()=>setMobileMenu(!mobileMenu)} aria-label={mobileMenu?"Fechar menu":"Abrir menu"} aria-expanded={mobileMenu}>☰</button><span>Flow Commerce / {navigation.find(n=>n.page===page)?.label}</span></div><span className="tag">Área autenticada</span></header>
   <section className="hero"><div><span className="eyebrow">BUNO · GESTÃO COMERCIAL</span><h1>{pageTitles[page].title}</h1><p className="muted">{pageTitles[page].description}</p></div></section>
   {notice&&<div role="status" className="notice">{notice}<button className="link" aria-label="Fechar aviso" onClick={()=>setNotice("")}>×</button></div>}
-  {page==="dashboard"&&<DashboardPage dashboard={dashboard} orders={orders} loading={loading} error={ordersError} onNew={startNew} onOrders={()=>navigate("orders")} onImports={()=>navigate("imports")} onSelect={openFromDashboard} onRefresh={()=>void refresh()}/>}
+  {page==="dashboard"&&<DashboardPage dashboard={dashboard} orders={latestOrders} loading={loading} error={ordersError} onNew={startNew} onOrders={()=>navigate("orders")} onImports={()=>navigate("imports")} onSelect={openFromDashboard} onRefresh={()=>void refresh()}/>}
   {page==="orders"&&<OrdersPage orders={orders} count={resultCount} page={orderPage} search={search} status={status} selected={selected} events={events} loading={loading||eventsLoading} error={ordersError} onSearch={setSearch} onStatus={setStatus} onPage={setOrderPage} onInspect={id=>void inspect(id)} onHistory={()=>navigate("history")} onNew={startNew} onNext={target=>void update(target)} onCancel={()=>{setCancelReason("");setCancelOpen(true)}} onRefresh={()=>void refresh()}/>}
   {page==="imports"&&<ImportsPage loading={loading} result={importResult} error={ordersError} onImport={file=>void importCsv(file)} onExport={()=>void exportOrders()}/>}
   {page==="history"&&<AuditPage order={selected} events={events} loading={eventsLoading} onOrders={()=>navigate("orders")}/>}
