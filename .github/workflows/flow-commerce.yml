@@ -39,6 +39,8 @@ jobs:
           cache: maven
           cache-dependency-path: 02-buno-flow-commerce/pom.xml
       - run: mvn -B clean verify
+      - name: Verify non-destructive staging API release gate
+        run: python3 -m unittest discover -s scripts -p 'test_staging_gate.py' -v
       - name: Verify persistence across process restart
         shell: bash
         run: |
