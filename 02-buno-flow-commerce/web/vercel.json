@@ -13,5 +13,11 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "/api/gateway?proxy_path=:path*"
+    }
   ]
 }
