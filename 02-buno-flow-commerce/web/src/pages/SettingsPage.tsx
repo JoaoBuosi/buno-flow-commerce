@@ -1,3 +1,4 @@
+import type React from "react";
 import type {CurrentUser,Session,StoreProfile} from "../types/commerce";
 type Props={session:Session;profile:StoreProfile|null;user:CurrentUser|null;storeName:string;oldPass:string;newPass:string;loading:boolean;onStoreName:(v:string)=>void;onOldPass:(v:string)=>void;onNewPass:(v:string)=>void;onRename:(e:React.FormEvent)=>void;onPassword:(e:React.FormEvent)=>void;onLogout:()=>void};
 export function SettingsPage({session,profile,user,storeName,oldPass,newPass,loading,onStoreName,onOldPass,onNewPass,onRename,onPassword,onLogout}:Props){
