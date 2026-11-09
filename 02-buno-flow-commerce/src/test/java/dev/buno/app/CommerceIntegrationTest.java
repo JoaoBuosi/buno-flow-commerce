@@ -153,6 +153,17 @@ class CommerceIntegrationTest {
     assertEquals("'=1+1",OrderExportService.safe("=1+1"));
   }
 
+  @Autowired org.springframework.jdbc.core.JdbcTemplate verificationDb;
+
+  @Test void tablesLiveOutsidePublicSchema() throws Exception {
+    Integer privateOrders=verificationDb.queryForObject(
+      "SELECT count(*) FROM information_schema.tables WHERE table_schema='flow_commerce' AND table_name='orders'",Integer.class);
+    Integer publicOrders=verificationDb.queryForObject(
+      "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='orders'",Integer.class);
+    assertEquals(1,privateOrders);
+    assertEquals(0,publicOrders);
+  }
+
   @Test void unauthenticatedRequestsAreRejected() throws Exception {
     mvc.perform(get("/api/v1/orders")).andExpect(status().isUnauthorized());
   }
