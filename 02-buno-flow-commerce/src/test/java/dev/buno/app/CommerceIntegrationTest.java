@@ -113,7 +113,31 @@ class CommerceIntegrationTest {
       .header("X-Store-Id",storeB.store())).andExpect(status().isUnauthorized());
   }
 
+  @Test void passwordChangeRevokesOldTokenAndIsolatesStores() throws Exception {
+    Identity owner=register(),other=register();
+    mvc.perform(get("/api/v1/store")
+      .header("Authorization","Bearer "+owner.token()).header("X-Store-Id",owner.store()))
+      .andExpect(status().isOk());
+    mvc.perform(patch("/api/v1/store")
+      .header("Authorization","Bearer "+owner.token()).header("X-Store-Id",owner.store())
+      .contentType(MediaType.APPLICATION_JSON)
+      .content(json.writeValueAsString(Map.of("name","Loja atualizada"))))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Loja atualizada"));
+    mvc.perform(get("/api/v1/store")
+      .header("Authorization","Bearer "+owner.token()).header("X-Store-Id",other.store()))
+      .andExpect(status().isUnauthorized());
+    MvcResult changed=mvc.perform(post("/api/v1/auth/change-password")
+      .header("Authorization","Bearer "+owner.token()).header("X-Store-Id",owner.store())
+      .contentType(MediaType.APPLICATION_JSON)
+      .content(json.writeValueAsString(Map.of("oldPassword","safe-password-2026",
+         "newPassword","safe-new-password-2026"))))
+      .andExpect(status().isOk()).andReturn();
+    assertTrue(json.readTree(changed.getResponse().getContentAsString()).has("accessToken"));
+    mvc.perform(get("/api/v1/store")
+      .header("Authorization","Bearer "+owner.token()).header("X-Store-Id",owner.store()))
+      .andExpect(status().isUnauthorized());
+  }
   @Test void unauthenticatedRequestsAreRejected() throws Exception {
-    mvc.perform(get("/api/v1/orders")).andExpect(status().isBadRequest());
+    mvc.perform(get("/api/v1/orders")).andExpect(status().isUnauthorized());
   }
 }
