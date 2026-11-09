@@ -94,7 +94,7 @@ public final class DemandInsights {
                 if(!Double.isFinite(scale)||scale==0)throw new IllegalArgumentException("invalid scale");
                 v+=coefficients.get(j).asDouble()*(x[j]-means.get(j).asDouble())/scale;
               }
-              prediction=Math.max(0.0,Math.expm1(Math.min(20.0,v)));
+              double cap=Math.max(20.0,Math.max(3.0*mean4+20.0,2.0*previous[0]+20.0));\n              prediction=Math.min(cap,Math.max(0.0,Math.expm1(Math.max(-20.0,Math.min(12.0,v)))));
               method="RESEARCH_MODEL_INTERNAL_PILOT";
             }
           }
