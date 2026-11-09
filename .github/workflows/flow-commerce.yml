@@ -27,7 +27,7 @@ jobs:
       run:
         working-directory: 02-buno-flow-commerce
     env:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/orders_test
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/orders_test?currentSchema=flow_commerce
       SPRING_DATASOURCE_USERNAME: app
       SPRING_DATASOURCE_PASSWORD: local-ci-only
     steps:
@@ -80,7 +80,7 @@ jobs:
             -v "$PWD:/workspace" postgres:16-alpine \
             pg_restore -h 127.0.0.1 -U app --no-owner --no-acl -d orders_restore_ci /workspace/backup-ci.dump
           docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" postgres:16-alpine \
-            psql -h 127.0.0.1 -U app -d orders_restore_ci -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM orders;"
+            psql -h 127.0.0.1 -U app -d orders_restore_ci -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM flow_commerce.orders;"
           rm -f backup-ci.dump
 
   frontend:
