@@ -28,7 +28,7 @@ test("lojistas isolados: cadastro, pedido, pagamento, CSV, auditoria, cancelamen
   await expect(page.getByRole("heading", { name: "Seus pedidos. Sob controle." })).toBeVisible();
 
   await page.getByRole("button", { name: "+ Novo pedido" }).click();
-  await page.getByLabel("Cliente").fill(customer);
+  await page.getByLabel("Cliente",{exact:true}).fill(customer);
   await page.getByPlaceholder("SKU").fill("SKU-STAGING");
   await page.getByPlaceholder("Descrição").fill("Produto de teste");
   await page.getByLabel("Quantidade").fill("2");
