@@ -32,7 +32,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
     res.setHeader("Cache-Control","no-store");
     String path=req.getRequestURI();
     String method=req.getMethod();
-    if("POST".equals(method) && (path.equals("/api/v1/auth/login") || (path.equals("/api/v1/auth/register") || path.equals("/api/v1/auth/reset/request"))){
+    if ("POST".equals(method) && (path.equals("/api/v1/auth/login") || path.equals("/api/v1/auth/register") || path.equals("/api/v1/auth/reset/request"))) {
       // Use socket address only; untrusted X-Forwarded-For cannot bypass the limiter.
       String key=req.getRemoteAddr();
       long now=System.currentTimeMillis();
