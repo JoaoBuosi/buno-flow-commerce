@@ -81,7 +81,7 @@ class CommerceIntegrationTest {
 
   @Test void csvImportIsAtomicAndRejectsDuplicates() throws Exception {
     Identity user=register();
-    String csv="order_key,customer,sku,description,quantity,price\\nEXT-11,Ana,SKU-A,Caneca,2,10.50\\nEXT-11,Ana,SKU-B,Copo,1,5.00\\n";
+    String csv="order_key,customer,sku,description,quantity,price\nEXT-11,Ana,SKU-A,Caneca,2,10.50\nEXT-11,Ana,SKU-B,Copo,1,5.00\n";
     var upload=new org.springframework.mock.web.MockMultipartFile("file","orders.csv","text/csv",csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     mvc.perform(multipart("/api/v1/orders/import").file(upload).header("Authorization","Bearer "+user.token())
       .header("X-Store-Id",user.store())).andExpect(status().isOk())
