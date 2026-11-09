@@ -24,6 +24,7 @@ SPRING_DATASOURCE_URL=jdbc:postgresql://<HOST_SESSION_POOLER>:5432/postgres?curr
 SPRING_DATASOURCE_USERNAME=<DATABASE_USERNAME_FROM_CONNECT>
 SPRING_DATASOURCE_PASSWORD=<PRIVATE_PASSWORD_IN_HOST_SECRET_STORE>
 COMMERCE_CORS_ORIGIN=https://<EXACT_PRIVATE_FRONTEND_DOMAIN>
+COMMERCE_PILOT_INVITE_CODE=<SECRET_DEFINED_ONLY_IN_BACKEND_HOST>
 DB_POOL_MAX=5
 COMMERCE_ML_PILOT_ENABLED=false
 COMMERCE_MAIL_ENABLED=false
@@ -31,7 +32,7 @@ COMMERCE_MAIL_ENABLED=false
 
 Não há senha real neste arquivo e **não enviar esses segredos pelo chat**. Usar conexão com criptografia TLS e credenciais de banco com acesso mínimo possível ao schema. Revisar o usuário PostgreSQL antes de produção: `postgres` tem privilégios amplos e não deve ser a identidade de longo prazo da API.
 
-**Flyway:** o perfil `supabase` usa `baseline-on-migrate=true` e `baseline-version=3` exclusivamente porque o Supabase foi inicializado fora do Flyway. Na primeira partida da API nesse projeto, o Flyway marca V1–V3 como baseline no schema existente. V4 é idempotente e já aplicada via Supabase, então ao rodar pelo Flyway registrará a versão sem duplicar índices. V5+ será gerenciada por Flyway no backend. **Nunca apagar `flyway_schema_history`, não rodar V1–V3 novamente nesse projeto e não habilitar o perfil `supabase` em DB desconhecido.**
+**Piloto privado:** o perfil Supabase exige `COMMERCE_PILOT_INVITE_CODE`. Sem ele, o cadastro falha fechado com 503. O código é digitado pelo lojista convidado durante cadastro e enviado somente por HTTPS; não empacotar no React/Vite nem versionar no GitHub. O link Vercel fica protegido por Vercel Authentication.\n\n**Flyway:** o perfil `supabase` usa `baseline-on-migrate=true` e `baseline-version=3` exclusivamente porque o Supabase foi inicializado fora do Flyway. Na primeira partida da API nesse projeto, o Flyway marca V1–V3 como baseline no schema existente. V4 é idempotente e já aplicada via Supabase, então ao rodar pelo Flyway registrará a versão sem duplicar índices. V5+ será gerenciada por Flyway no backend. **Nunca apagar `flyway_schema_history`, não rodar V1–V3 novamente nesse projeto e não habilitar o perfil `supabase` em DB desconhecido.**
 
 Nos testes locais/CI, o perfil Supabase **não** é usado: Flyway executa V1–V3 do zero e o PostgreSQL fica isolado.
 
