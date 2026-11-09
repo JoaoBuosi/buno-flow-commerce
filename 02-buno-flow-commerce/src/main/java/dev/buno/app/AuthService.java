@@ -53,7 +53,7 @@ public class AuthService {
     byte[] raw=new byte[32];random.nextBytes(raw);
     String token=HexFormat.of().formatHex(raw);
     db.update("INSERT INTO user_sessions(token_hash,user_id,expires_at) VALUES(?,?,?)",
-        hash(token),uid,Instant.now().plus(12,ChronoUnit.HOURS));
+        hash(token),uid,java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).plusHours(12));
     return new Token(token,storeId,role);
   }
   public Session require(String auth,String storeHeader) {
