@@ -18,6 +18,30 @@
     {
       "source": "/api/v1/:path*",
       "destination": "/api/gateway?proxy_path=:path*"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/orders",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/imports",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/history",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/intelligence",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/settings",
+      "destination": "/index.html"
     }
   ]
 }
