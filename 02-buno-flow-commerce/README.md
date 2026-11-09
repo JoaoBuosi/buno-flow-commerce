@@ -51,11 +51,14 @@ mvn test
 A suíte de integração espera PostgreSQL real com um banco `orders_test` isolado. O workflow GitHub Actions provisiona o banco automaticamente.
 
 ## Limites atuais
-- Ainda não há recuperação de senha ou gestão de funcionários.
+- Recuperação de senha implementada, mas envio depende de SMTP/HTTPS configurados; gestão de funcionários não disponível.
 - CSV possui endpoint transacional; frontend React deve utilizá-lo.
 - Sem gateway de pagamento, envio WhatsApp ou marketplace.
-- Sem teste de reinicialização comprovado e sem revisão de segurança para produção.
+- Há testes automatizados de reinicialização, backup e restore em PostgreSQL local; falta revisão independente de segurança e confirmação na infraestrutura real.
 - O repositório contém código legado desativado; verificar migrations com base de dados anterior antes de atualizar instâncias existentes.
 - A Vercel hospeda apenas a **demo**, não o backend Spring Boot. Configurar um host Java com TLS e PostgreSQL antes de conectar frontend real.
 
 **Não vincular dados de clientes reais antes de completar segurança, testes, backup e validação.**
+
+## Staging Supabase dedicado
+Projeto privado `buno-flow-commerce` no Supabase (ref `pqdwxihinbmeiorkqdtq`). V1–V3 criadas no banco e V4 de índices aplicada. A conexão real com a API Java requer segredos JDBC configurados no host. Usar perfil `supabase` que faz baseline Flyway em V3 e execução idempotente de V4; veja `docs/SUPABASE_STAGING.md`.
