@@ -68,6 +68,17 @@ public class AuthService {
     Map<String,Object> m=matches.get(0);
     return new Session((UUID)m.get("user_id"),store,(String)m.get("email"),(String)m.get("role"));
   }
+  @Transactional
+  public Token changePassword(Session caller,String oldPassword,String newPassword) {
+    if(oldPassword==null || newPassword==null || newPassword.length()<12 || newPassword.length()>72)
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Senha inválida");
+    var hashes=db.queryForList("SELECT password_hash FROM users WHERE id=? FOR UPDATE",caller.userId());
+    if(hashes.size()!=1 || !passwords.matches(oldPassword,(String)hashes.get(0).get("password_hash")))throw unauth();
+    if(oldPassword.equals(newPassword))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A nova senha deve ser diferente");
+    db.update("UPDATE users SET password_hash=? WHERE id=?",passwords.encode(newPassword),caller.userId());
+    db.update("DELETE FROM user_sessions WHERE user_id=?",caller.userId());
+    return issue(caller.userId(),caller.storeId(),caller.role());
+  }
   public void logout(String auth) {
     if(auth!=null && auth.startsWith("Bearer ")) db.update("DELETE FROM user_sessions WHERE token_hash=?",hash(auth.substring(7)));
   }
