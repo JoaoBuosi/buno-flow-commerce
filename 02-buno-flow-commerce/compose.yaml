@@ -4,7 +4,7 @@ services:
     ports:
       - "8102:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/orders
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/orders?currentSchema=flow_commerce
       SPRING_DATASOURCE_USERNAME: app
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
       COMMERCE_CORS_ORIGIN: ${COMMERCE_CORS_ORIGIN:-http://localhost:5173}
