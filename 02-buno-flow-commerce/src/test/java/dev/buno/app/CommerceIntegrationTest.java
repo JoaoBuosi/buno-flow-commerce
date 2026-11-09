@@ -78,6 +78,20 @@ class CommerceIntegrationTest {
       .header("X-Store-Id",user.store())).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(3));
   }
 
+
+  @Test void csvImportIsAtomicAndRejectsDuplicates() throws Exception {
+    Identity user=register();
+    String csv="order_key,customer,sku,description,quantity,price\\nEXT-11,Ana,SKU-A,Caneca,2,10.50\\nEXT-11,Ana,SKU-B,Copo,1,5.00\\n";
+    var upload=new org.springframework.mock.web.MockMultipartFile("file","orders.csv","text/csv",csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    mvc.perform(multipart("/api/v1/orders/import").file(upload).header("Authorization","Bearer "+user.token())
+      .header("X-Store-Id",user.store())).andExpect(status().isOk())
+      .andExpect(jsonPath("$.imported").value(1));
+    mvc.perform(multipart("/api/v1/orders/import").file(upload).header("Authorization","Bearer "+user.token())
+      .header("X-Store-Id",user.store())).andExpect(status().isConflict());
+    mvc.perform(get("/api/v1/orders").header("Authorization","Bearer "+user.token())
+      .header("X-Store-Id",user.store())).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+  }
+
   @Test void unauthenticatedRequestsAreRejected() throws Exception {
     mvc.perform(get("/api/v1/orders")).andExpect(status().isBadRequest());
   }
