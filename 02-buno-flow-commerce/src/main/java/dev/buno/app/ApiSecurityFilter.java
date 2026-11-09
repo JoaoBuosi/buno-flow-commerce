@@ -32,7 +32,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
     res.setHeader("Cache-Control","no-store");
     String path=req.getRequestURI();
     String method=req.getMethod();
-    if("POST".equals(method) && (path.equals("/api/v1/auth/login") || path.equals("/api/v1/auth/register"))){
+    if("POST".equals(method) && (path.equals("/api/v1/auth/login") || (path.equals("/api/v1/auth/register") || path.equals("/api/v1/auth/reset/request"))){
       // Use socket address only; untrusted X-Forwarded-For cannot bypass the limiter.
       String key=req.getRemoteAddr();
       long now=System.currentTimeMillis();
@@ -46,7 +46,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
       if(loginAttempts.size()>10_000) loginAttempts.entrySet().removeIf(e->now-e.getValue().since>WINDOW_MS);
     }
     // A malformed or absent auth header must be rejected before Spring dispatches a handler.
-    if(path.startsWith("/api/v1/") && !path.equals("/api/v1/auth/login") && !path.equals("/api/v1/auth/register") &&
+    if(path.startsWith("/api/v1/") && !path.equals("/api/v1/auth/login") && !path.equals("/api/v1/auth/register") && !path.equals("/api/v1/auth/reset/request") && !path.equals("/api/v1/auth/reset/complete") &&
        !"OPTIONS".equals(method)){
       String header=req.getHeader("Authorization");
       String store=req.getHeader("X-Store-Id");
