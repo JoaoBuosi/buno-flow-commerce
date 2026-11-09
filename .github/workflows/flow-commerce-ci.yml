@@ -1,0 +1,26 @@
+name: Flow Commerce JVM tests
+on:
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/**'
+      - '.github/workflows/flow-commerce-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - '02-buno-flow-commerce/**'
+      - '.github/workflows/flow-commerce-ci.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: 02-buno-flow-commerce/pom.xml
+      - name: Test Spring Boot workflow
+        run: mvn --batch-mode --no-transfer-progress -f 02-buno-flow-commerce/pom.xml test
