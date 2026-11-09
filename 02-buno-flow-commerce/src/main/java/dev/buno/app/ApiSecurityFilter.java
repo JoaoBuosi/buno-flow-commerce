@@ -44,7 +44,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
       if (edgeSecret.isBlank()) {
         res.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
         res.setContentType("application/json");
-        res.getWriter().print("{\\"message\\":\\"Staging gateway not configured\\"}");
+        res.getWriter().print("{\"message\":\"Staging gateway not configured\"}");
         return;
       }
       String supplied=req.getHeader("X-Buno-Edge-Key");
@@ -52,7 +52,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
       if (!MessageDigest.isEqual(edgeSecret.getBytes(StandardCharsets.UTF_8),actual)) {
         res.setStatus(HttpServletResponse.SC_FORBIDDEN);
         res.setContentType("application/json");
-        res.getWriter().print("{\\"message\\":\\"Staging gateway required\\"}");
+        res.getWriter().print("{\"message\":\"Staging gateway required\"}");
         return;
       }
     }
