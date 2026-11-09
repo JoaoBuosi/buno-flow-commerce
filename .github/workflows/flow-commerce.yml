@@ -39,6 +39,32 @@ jobs:
           cache: maven
           cache-dependency-path: 02-buno-flow-commerce/pom.xml
       - run: mvn -B clean verify
+      - name: Verify persistence across process restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -jar target/buno-flow-commerce-0.2.0-SNAPSHOT.jar > /tmp/commerce-api.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 40); do
+            if curl -fsS http://localhost:8080/actuator/health | grep -q UP; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/actuator/health | grep -q UP
+          LOGIN=$(curl -fsS -X POST http://localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' -d "{\"email\":\"restart-${GITHUB_RUN_ID}@example.test\",\"password\":\"ci-only-strong-password\",\"storeName\":\"Restart Test\"}")
+          TOKEN=$(echo "$LOGIN" | jq -r '.accessToken')
+          STORE=$(echo "$LOGIN" | jq -r '.storeId')
+          CREATED=$(curl -fsS -X POST http://localhost:8080/api/v1/orders -H "Authorization: Bearer $TOKEN" -H "X-Store-Id: $STORE" -H 'Content-Type: application/json' -d '{"customer":"Persist Test","items":[{"sku":"R1","description":"Item","quantity":1,"price":12.34}]}')
+          ID=$(echo "$CREATED" | jq -r '.id')
+          test -n "$ID" && test "$ID" != null
+          kill "$PID"; wait "$PID" 2>/dev/null || true
+          java -jar target/buno-flow-commerce-0.2.0-SNAPSHOT.jar > /tmp/commerce-api-restart.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 40); do
+            if curl -fsS http://localhost:8080/actuator/health | grep -q UP; then break; fi
+            sleep 2
+          done
+          curl -fsS "http://localhost:8080/api/v1/orders/$ID" -H "Authorization: Bearer $TOKEN" -H "X-Store-Id: $STORE" | jq -e '.customer_name == "Persist Test"'
 
   frontend:
     runs-on: ubuntu-latest
