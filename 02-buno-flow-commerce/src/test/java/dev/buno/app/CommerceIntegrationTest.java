@@ -164,6 +164,28 @@ class CommerceIntegrationTest {
     assertEquals(0,publicOrders);
   }
 
+
+  @Test void dashboardAndPaginationCoverAllTenantOrders() throws Exception {
+    Identity a=register(),b=register();
+    for(int i=0;i<26;i++) create(a);
+    mvc.perform(get("/api/v1/dashboard")
+      .header("Authorization","Bearer "+a.token()).header("X-Store-Id",a.store()))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.order_count").value(26))
+      .andExpect(jsonPath("$.active_count").value(26));
+    mvc.perform(get("/api/v1/orders/count")
+      .header("Authorization","Bearer "+a.token()).header("X-Store-Id",a.store()))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(26));
+    mvc.perform(get("/api/v1/orders").param("page","0").param("size","25")
+      .header("Authorization","Bearer "+a.token()).header("X-Store-Id",a.store()))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(25));
+    mvc.perform(get("/api/v1/orders").param("page","1").param("size","25")
+      .header("Authorization","Bearer "+a.token()).header("X-Store-Id",a.store()))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+    mvc.perform(get("/api/v1/dashboard")
+      .header("Authorization","Bearer "+b.token()).header("X-Store-Id",b.store()))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.order_count").value(0));
+  }
+
   @Test void unauthenticatedRequestsAreRejected() throws Exception {
     mvc.perform(get("/api/v1/orders")).andExpect(status().isUnauthorized());
   }
