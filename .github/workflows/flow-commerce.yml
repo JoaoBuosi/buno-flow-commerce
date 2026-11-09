@@ -66,6 +66,23 @@ jobs:
           done
           curl -fsS "http://localhost:8080/api/v1/orders/$ID" -H "Authorization: Bearer $TOKEN" -H "X-Store-Id: $STORE" | jq -e '.customer_name == "Persist Test"'
 
+
+      - name: Verify PostgreSQL backup and isolated restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" \
+            -v "$PWD:/workspace" postgres:16-alpine \
+            pg_dump -h 127.0.0.1 -U app -d orders_test -Fc -f /workspace/backup-ci.dump
+          docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" postgres:16-alpine \
+            createdb -h 127.0.0.1 -U app orders_restore_ci
+          docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" \
+            -v "$PWD:/workspace" postgres:16-alpine \
+            pg_restore -h 127.0.0.1 -U app --no-owner --no-acl -d orders_restore_ci /workspace/backup-ci.dump
+          docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" postgres:16-alpine \
+            psql -h 127.0.0.1 -U app -d orders_restore_ci -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM orders;"
+          rm -f backup-ci.dump
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
