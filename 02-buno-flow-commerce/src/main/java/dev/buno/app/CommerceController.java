@@ -16,7 +16,8 @@ public class CommerceController {
   private final AuthService auth;
   private final OrderStore orders;
   private final OrderImportService imports;
-  public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports){this.auth=auth;this.orders=orders;this.imports=imports;}
+  private final DemandInsights insights;
+  public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports,DemandInsights insights){this.auth=auth;this.orders=orders;this.imports=imports;this.insights=insights;}
   public record Register(String email,String password,String storeName){}
   public record Login(String email,String password){}
   @PostMapping("/auth/register")
@@ -40,6 +41,8 @@ public class CommerceController {
   public Map<String,Object> create(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,@RequestBody OrderStore.Create body){return orders.create(who(token,store),body);}
   @PostMapping(value="/orders/import", consumes="multipart/form-data")
   public OrderImportService.Result importCsv(@RequestHeader("Authorization") String token,@RequestHeader("X-Store-Id") String store,@RequestParam("file") org.springframework.web.multipart.MultipartFile file){return imports.importCsv(who(token,store),file);}
+  @GetMapping("/insights/demand")
+  public Map<String,Object> skuDemand(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,@RequestParam String sku){return insights.forecast(who(token,store),sku);}
   @GetMapping("/orders")
   public List<Map<String,Object>> list(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,
     @RequestParam(defaultValue="0")int page,@RequestParam(defaultValue="20")int size,@RequestParam(required=false)String status,@RequestParam(required=false)String search){
