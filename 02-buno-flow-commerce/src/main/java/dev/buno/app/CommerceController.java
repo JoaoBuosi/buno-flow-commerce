@@ -65,6 +65,15 @@ public class CommerceController {
   }
   @GetMapping("/insights/demand")
   public Map<String,Object> skuDemand(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,@RequestParam String sku){return insights.forecast(who(token,store),sku);}
+  @GetMapping("/dashboard")
+  public Map<String,Object> dashboard(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store){
+    return orders.dashboard(who(token,store));
+  }
+  @GetMapping("/orders/count")
+  public Map<String,Object> orderCount(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,
+    @RequestParam(required=false)String status,@RequestParam(required=false)String search){
+    return Map.of("total",orders.count(who(token,store),status,search));
+  }
   @GetMapping("/orders")
   public List<Map<String,Object>> list(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,
     @RequestParam(defaultValue="0")int page,@RequestParam(defaultValue="20")int size,@RequestParam(required=false)String status,@RequestParam(required=false)String search){
