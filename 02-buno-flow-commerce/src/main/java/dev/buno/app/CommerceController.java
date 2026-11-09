@@ -20,12 +20,22 @@ public class CommerceController {
   private final StoreProfileService storeProfiles;
   private final OrderExportService exports;
   private final PasswordResetService resets;
+  // Do not disclose this code in the frontend bundle or logs.
+  @Value("${commerce.pilot-invite-code:}") private String pilotInviteCode;
+  @Value("${commerce.pilot-only:false}") private boolean pilotOnly;
+
   public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports,DemandInsights insights,StoreProfileService storeProfiles,OrderExportService exports,PasswordResetService resets){this.auth=auth;this.orders=orders;this.imports=imports;this.insights=insights;this.storeProfiles=storeProfiles;this.exports=exports;this.resets=resets;}
   public record Register(String email,String password,String storeName){}
   public record Login(String email,String password){}
   @PostMapping("/auth/register")
-  public AuthService.Token register(@RequestBody Register data){
+  public AuthService.Token register(@RequestHeader(value="X-Pilot-Code",required=false)String submittedCode,@RequestBody Register data){
     if(data==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    if(pilotOnly && pilotInviteCode.isBlank())
+      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Convites do piloto ainda não configurados");
+    if(!pilotInviteCode.isBlank() && !java.security.MessageDigest.isEqual(
+      pilotInviteCode.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+      (submittedCode==null?"":submittedCode).getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Código de acesso ao piloto inválido");
     return auth.register(data.email(),data.password(),data.storeName());
   }
   @PostMapping("/auth/login")
@@ -114,7 +124,7 @@ class CommerceCors {
   WebMvcConfigurer cors(@Value("${commerce.cors-origin}") String origin){
     return new WebMvcConfigurer(){
       @Override public void addCorsMappings(CorsRegistry r){
-        r.addMapping("/api/v1/**").allowedOrigins(origin).allowedMethods("GET","POST","PATCH","OPTIONS").allowedHeaders("Authorization","Content-Type","X-Store-Id");
+        r.addMapping("/api/v1/**").allowedOrigins(origin).allowedMethods("GET","POST","PATCH","OPTIONS").allowedHeaders("Authorization","Content-Type","X-Store-Id","X-Pilot-Code");
       }
     };
   }
