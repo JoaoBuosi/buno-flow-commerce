@@ -50,7 +50,7 @@ function App(){
      setAuthMode("login");setNotice("Senha atualizada. Entre com a nova senha.");
    }catch(e){setNotice((e as Error).message)}finally{setLoading(false)}
  }
- async function authenticate(e:React.FormEvent){e.preventDefault();setLoading(true);try{const data=await call(authMode==="login"?"/auth/login":"/auth/register","POST",authMode==="login"?{email,password}:{email,password,storeName:shop},null,authMode==="register"?{"X-Pilot-Code":inviteCode}:{});setSession(data);setPassword("");setInviteCode("");setNotice("Sessão iniciada");}catch(e){setNotice((e as Error).message)}finally{setLoading(false)}}
+ async function authenticate(e:React.FormEvent){e.preventDefault();setLoading(true);try{const data=await call(authMode==="login"?"/auth/login":"/auth/register","POST",authMode==="login"?{email,password}:{email,password,storeName:shop},null,authMode==="register"?{"X-Pilot-Code":inviteCode}:{});setSession(data);setAuthMode("login");setPassword("");setInviteCode("");setNotice("Sessão iniciada");}catch(e){setNotice((e as Error).message)}finally{setLoading(false)}}
  async function refresh(s:Session=session!,p=orderPage,q=search,f=status){
    if(!s)return;
    setLoading(true);
@@ -75,7 +75,7 @@ function App(){
  async function importCsv(file:File){if(!session)return;setLoading(true);try{const body=new FormData();body.append("file",file);const res=await fetch(base+"/orders/import",{method:"POST",headers:{"Authorization":"Bearer "+session.accessToken,"X-Store-Id":session.storeId},body});if(!res.ok){const info=await res.json().catch(()=>({}));throw new Error(info.detail||"Importação recusada: HTTP "+res.status)}const result=await res.json();setNotice(result.imported+" pedido(s) importado(s)");await refresh()}catch(e){setNotice((e as Error).message)}finally{setLoading(false)}}
  async function createOrder(e:React.FormEvent){e.preventDefault();setLoading(true);try{await call("/orders","POST",{customer,items});setShowNew(false);setCustomer("");setItems([{sku:"",description:"",quantity:1,price:1}]);setNotice("Pedido cadastrado");setOrderPage(0);await refresh(session!,0)}catch(e){setNotice((e as Error).message)}finally{setLoading(false)}}
  async function update(target:string){if(!selected)return;setLoading(true);try{if(target==="CANCELED"){let reason=window.prompt("Motivo obrigatório do cancelamento:");if(!reason||!reason.trim()){setLoading(false);return}await call("/orders/"+selected.id+"/cancel","POST",{reason})}else await call("/orders/"+selected.id+"/status","PATCH",{status:target});setNotice("Pedido atualizado");await inspect(selected.id);await refresh()}catch(e){setNotice((e as Error).message)}finally{setLoading(false)}}
- async function logout(){try{await call("/auth/logout","POST")}catch{}setSession(null);setSelected(null);setOrders([]);setEvents([])}
+ async function logout(){try{await call("/auth/logout","POST")}catch{}setSession(null);setAuthMode("login");setSelected(null);setOrders([]);setEvents([])}
  useEffect(()=>{if(!session)return;const timer=window.setTimeout(()=>{void refresh(session)},250);return()=>window.clearTimeout(timer)},[session,orderPage,search,status]);
  useEffect(()=>{setOrderPage(0)},[search,status]);
  useEffect(()=>{if(page==="settings"&&session)void loadStore()},[page,session]);
