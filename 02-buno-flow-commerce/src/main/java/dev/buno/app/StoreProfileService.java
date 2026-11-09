@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
-public final class StoreProfileService {
+public class StoreProfileService {
   private final JdbcTemplate db;
   public StoreProfileService(JdbcTemplate db){this.db=db;}
   public record Update(String name){}
