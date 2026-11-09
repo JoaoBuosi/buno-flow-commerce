@@ -45,8 +45,10 @@ public class CoreWorkflowClient {
             return mapper.readTree(response.body());
         } catch (ResponseStatusException ex) {
             throw ex;
-        } catch (Exception ex) {
+        } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Chamada ao Buno Core interrompida");
+        } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Falha de comunicacao com Buno Core");
         }
     }
