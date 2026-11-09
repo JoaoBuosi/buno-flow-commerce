@@ -3,11 +3,18 @@
 ## Recursos verificados
 
 - Frontend React: Vercel project `buno-flow-commerce-staging-web`, projeto ID `prj_9B8xiQsHwAu79Cd8dYUirqgyAAPL`.
-- URL protegida (Vercel Authentication para ALL deployments): https://buno-flow-commerce-staging-ol4e8c1pd-joaobuosis-projects.vercel.app
-- Deploy Vercel id `dpl_8XxetvnPm6Dza4bfNuQaLNXpgvM2`, estado READY, teste HTTP 200.
+- URL protegida (Vercel Authentication para ALL deployments): https://buno-flow-commerce-staging-jsffagrlq-joaobuosis-projects.vercel.app
+- Deploy Vercel id `dpl_8KsNHQcF8LtjiNyLDsHn7T8S4gn9`, estado READY, teste HTTP 200.
 - O Java Spring Boot **NÃO está hospedado ainda**. A interface falha de maneira segura quando `VITE_API_URL` está ausente.
 - Banco Supabase existente `buno-flow-commerce` (ref `pqdwxihinbmeiorkqdtq`), schema privado `flow_commerce` com 9 tabelas. Bootstrap Supabase V1–V4 aplicado fora do Flyway, e baseline Flyway V3 + V4 idempotente verificados no GitHub Actions.
 - PR de desenvolvimento `https://github.com/JoaoBuosi/buno-flow-commerce/pull/1`; nenhuma alteração incorporada em `main`.
+
+## Testes automatizados comprovados (staging funcional ainda pendente de API remota)
+
+- GitHub Actions: https://github.com/JoaoBuosi/buno-flow-commerce/actions/runs/42635767476
+- Playwright 1.65.0 + Chromium: **1 cenário completo aprovado**, incluindo cadastro convidado, pedidos, status, importação/exportação CSV, auditoria, cancelamento, isolamento entre lojas, logout e novo login.
+- Java/Spring Boot + PostgreSQL real efêmero em CI: https://github.com/JoaoBuosi/buno-flow-commerce/actions/runs/42635767434 — backend e React verdes.
+- Esses testes **não** acessaram o Supabase de produção/staging e não validam integração remoto-para-remoto.
 
 ## Implantar backend no Railway (requer conexão autorizada pelo proprietário)
 
@@ -22,7 +29,7 @@ SPRING_PROFILES_ACTIVE=supabase
 SPRING_DATASOURCE_URL=jdbc:postgresql://<SESSION_POOLER_HOST>:5432/postgres?currentSchema=flow_commerce&sslmode=require
 SPRING_DATASOURCE_USERNAME=<SUPABASE_SESSION_POOLER_USERNAME>
 SPRING_DATASOURCE_PASSWORD=<DATABASE_PASSWORD>
-COMMERCE_CORS_ORIGIN=https://buno-flow-commerce-staging-ol4e8c1pd-joaobuosis-projects.vercel.app
+COMMERCE_CORS_ORIGIN=https://buno-flow-commerce-staging-jsffagrlq-joaobuosis-projects.vercel.app
 COMMERCE_PILOT_INVITE_CODE=<RANDOM_SECRET_SHARED_ONLY_WITH_TESTERS>
 COMMERCE_MAIL_ENABLED=false
 COMMERCE_ML_PILOT_ENABLED=false
