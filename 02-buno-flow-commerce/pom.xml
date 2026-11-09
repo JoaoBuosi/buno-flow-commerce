@@ -9,4 +9,4 @@
 <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-crypto</artifactId></dependency>
 <dependency><groupId>org.springframework</groupId><artifactId>spring-context-support</artifactId></dependency>
 <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
-<dependency><groupId>org.apache.commons</groupId><artifactId>commons-csv</artifactId><version>1.13.0</version></dependency></dependencies><build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>
+<dependency><groupId>org.apache.commons</groupId><artifactId>commons-csv</artifactId><version>1.13.0</version></dependency><dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-mail</artifactId></dependency></dependencies><build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>
