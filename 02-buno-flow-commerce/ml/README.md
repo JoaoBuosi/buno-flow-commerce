@@ -21,7 +21,7 @@ O workflow `.github/workflows/flow-ml.yml` baixa o arquivo direto da origem e ex
 
 - Previsão de demanda **da semana** de cada SKU, com lags 1 e 2, média e desvio padrão das 4 semanas passadas e sazonalidade semanal.
 - `Ridge` sobre `log1p(unidades)`. Divisão treino/validação por tempo; sem dados futuros nas features.
-- Baseline: média das 4 semanas. O modelo só é **candidato ao piloto interno** se melhorar MAE em pelo menos 5% e tiver WAPE menor que 100%.
+- As previsões são limitadas por valores derivados exclusivamente das quatro semanas anteriores para impedir extrapolações absurdas.\n- Baseline: média das 4 semanas. O modelo só é **candidato ao piloto interno** se melhorar MAE em pelo menos 5% e tiver WAPE menor que 100%.
 - Isso **não equivale a validação para o Brasil nem é garantia de demanda ou receita**. Requer dados consentidos de lojas piloto, validação temporal em cada loja, monitoramento de drift e revisão de performance antes de habilitar por padrão.
 - Dataset antigo: varejo do Reino Unido em 2010–2011. Não é adequado para inferir atrasos de entrega ou fraude.
 - O processo não exporta dados de clientes, valores de pedidos, nem linhas do dataset.
