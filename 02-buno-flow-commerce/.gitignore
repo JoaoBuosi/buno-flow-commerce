@@ -1,0 +1,13 @@
+# Never commit shop data, passwords, config or training source rows
+.env
+.env.*
+!.env.example
+!web/.env.example
+target/
+web/node_modules/
+web/dist/
+ml/data/
+ml/artifacts/
+*.dump
+*.backup
+*.log
