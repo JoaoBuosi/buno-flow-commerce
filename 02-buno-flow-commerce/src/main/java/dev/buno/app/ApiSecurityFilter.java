@@ -5,6 +5,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import org.springframework.beans.factory.annotation.Value;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -20,6 +23,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public final class ApiSecurityFilter extends OncePerRequestFilter {
   private static final long WINDOW_MS=10*60*1000L;
   private static final int MAX_ATTEMPTS=20;
+  @Value("${commerce.edge-required:false}") private boolean edgeRequired;
+  @Value("${commerce.edge-secret:}") private String edgeSecret;
   private final ConcurrentHashMap<String,Counter> loginAttempts=new ConcurrentHashMap<>();
   private static final class Counter { long since; int used; Counter(long now){since=now;used=0;} }
 
@@ -32,6 +37,26 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
     res.setHeader("Cache-Control","no-store");
     String path=req.getRequestURI();
     String method=req.getMethod();
+    // Network-facing Railway endpoint must be called only by Vercel's
+    // server-side gateway, never with a secret embedded in a browser bundle.
+    // This guard is intentionally independent of user authentication.
+    if (edgeRequired && path.startsWith("/api/v1/")) {
+      if (edgeSecret.isBlank()) {
+        res.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+        res.setContentType("application/json");
+        res.getWriter().print("{\\"message\\":\\"Staging gateway not configured\\"}");
+        return;
+      }
+      String supplied=req.getHeader("X-Buno-Edge-Key");
+      byte[] actual=(supplied==null?"":supplied).getBytes(StandardCharsets.UTF_8);
+      if (!MessageDigest.isEqual(edgeSecret.getBytes(StandardCharsets.UTF_8),actual)) {
+        res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        res.setContentType("application/json");
+        res.getWriter().print("{\\"message\\":\\"Staging gateway required\\"}");
+        return;
+      }
+    }
+
     if ("POST".equals(method) && (path.equals("/api/v1/auth/login") || path.equals("/api/v1/auth/register") || path.equals("/api/v1/auth/reset/request"))) {
       // Use socket address only; untrusted X-Forwarded-For cannot bypass the limiter.
       String key=req.getRemoteAddr();
