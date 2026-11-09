@@ -1,3 +1,4 @@
+import type React from "react";
 import type {NewItem,Order,OrderEvent} from "../types/commerce";
 import {dateTime,labels,money,next} from "../types/commerce";
 type Props={orders:Order[];count:number;page:number;search:string;status:string;selected:Order|null;events:OrderEvent[];loading:boolean;error:string;onSearch:(v:string)=>void;onStatus:(v:string)=>void;onPage:(p:number)=>void;onInspect:(id:string)=>void;onHistory:()=>void;onNew:()=>void;onNext:(status:string)=>void;onCancel:()=>void;onRefresh:()=>void};
