@@ -11,6 +11,11 @@ test("lojistas isolados: cadastro, pedido, pagamento, CSV, auditoria, cancelamen
   const customer = "Cliente Teste " + id;
 
   await page.goto("/");
+  await expect(page.locator("img.brandMark").first()).toBeVisible();
+  const iconResponse = await request.get("/branding/favicon.ico");
+  expect(iconResponse.ok()).toBeTruthy();
+  expect(iconResponse.headers()["content-type"]).toContain("image");
+
   await page.getByRole("button", { name: "Criar conta e loja" }).click();
   await page.getByLabel("Nome da loja").fill(shop);
   await page.getByLabel("Código de convite do piloto").fill(process.env.E2E_PILOT_CODE || "ci-private-test");
