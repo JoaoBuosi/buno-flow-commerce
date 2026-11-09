@@ -1,0 +1,29 @@
+name: Export Flow Commerce 0.4.2 source ZIP
+on:
+  push:
+    branches:
+      - feat/flow-commerce-official-branding
+    paths:
+      - .github/workflows/export-branding-source.yml
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Create reproducible snapshot of reviewed branding commit
+        run: |
+          set -eu
+          git cat-file -e 050c8d7da51cce9e244c319bc957ba5ac0833cf5^{commit}
+          git archive --format=zip --prefix=flow-commerce-0.4.2/ 050c8d7da51cce9e244c319bc957ba5ac0833cf5 > flow-commerce-0.4.2-codigo.zip
+          unzip -t flow-commerce-0.4.2-codigo.zip | tail -1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flow-commerce-0.4.2-source
+          path: flow-commerce-0.4.2-codigo.zip
+          retention-days: 7
