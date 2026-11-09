@@ -80,7 +80,7 @@ def train(input_path: Path, output_dir: Path) -> dict:
     xtrain = scaler.fit_transform(train_data[FEATURES].to_numpy())
     model = Ridge(alpha=20.0).fit(xtrain, np.log1p(train_data["units"].to_numpy()))
     xtest = scaler.transform(test[FEATURES].to_numpy())
-    predicted = np.maximum(0.0, np.expm1(model.predict(xtest)))
+    # Clamp the back-transformed log prediction using only historical features.\n    # Protects against extreme extrapolations for unusually large or sparse SKUs.\n    predicted_raw = np.maximum(0.0, np.expm1(np.clip(model.predict(xtest), -20, 12)))\n    max_reasonable = np.maximum(20.0, np.maximum(3.0 * test["lag_4_avg"].to_numpy() + 20.0,\n                                                 2.0 * test["lag_1"].to_numpy() + 20.0))\n    predicted = np.minimum(predicted_raw, max_reasonable)
     y = test["units"].to_numpy()
     baseline = np.maximum(0.0, test["lag_4_avg"].to_numpy())
     mae = mean_absolute_error(y, predicted)
@@ -110,7 +110,7 @@ def train(input_path: Path, output_dir: Path) -> dict:
         "scale": [float(v) for v in scaler.scale_],
         "coefficients": [float(v) for v in model.coef_],
         "intercept": float(model.intercept_),
-        "target": "log1p(weekly positive unit demand)",
+        "target": "log1p(weekly positive unit demand)",\n        "prediction_guard": "min(expm1(clamp(raw,-20,12)),max(20,3*mean4+20,2*lag1+20))",
         "provenance": {"source": SOURCE, "doi": DOI, "license": "CC BY 4.0"},
         "evaluation": report,
     }
