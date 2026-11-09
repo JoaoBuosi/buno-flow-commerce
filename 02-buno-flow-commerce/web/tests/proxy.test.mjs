@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
-import handler from "../api/[...path].js";
+import handler from "../api/gateway.js";
 
 const setup=({url="/api/v1/orders",method="GET",headers={},body=""}={})=>{
   const req=Readable.from(body ? [Buffer.from(body)] : []);
@@ -35,7 +35,7 @@ test("fails closed when upstream and secret not configured",async()=>{
 });
 
 test("injects server-only secret and strips browser cookies and spoofed headers",async()=>{
-  const {req,res}=setup({url:"/api/v1/orders?size=2",headers:{
+  const {req,res}=setup({url:"/api/gateway?proxy_path=orders&size=2",headers:{
     cookie:"vercel-auth-sensitive","x-buno-edge-key":"forged","authorization":"Bearer user-token",
     "x-store-id":"store-a","x-forwarded-for":"fake-ip"
   }});
