@@ -1,0 +1,59 @@
+name: Flow Commerce - ML research (UCI licensed data)
+on:
+  push:
+    branches: [feat/commerce-saas-mvp]
+    paths:
+      - '02-buno-flow-commerce/ml/**'
+      - '.github/workflows/flow-ml.yml'
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/ml/**'
+      - '.github/workflows/flow-ml.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  train-evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: 02-buno-flow-commerce
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: 02-buno-flow-commerce/ml/requirements.txt
+      - name: Install pinned ML dependencies
+        run: python -m pip install -r ml/requirements.txt
+      - name: Run feature-engineering tests
+        run: python -m unittest discover -s ml -p 'test_*.py' -v
+      - name: Download source dataset (CC BY 4.0)
+        run: |
+          mkdir -p ml/data ml/artifacts
+          curl --fail --show-error --location --retry 3 --max-time 180 \
+            --output ml/data/online_retail.zip \
+            'https://archive.ics.uci.edu/static/public/352/online+retail.zip'
+          unzip -oq ml/data/online_retail.zip -d ml/data/
+          find ml/data/ -name '*.xlsx' -type f -print
+      - name: Train with time-held-out test
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$(find ml/data -type f -iname '*.xlsx' | head -1)"
+          test -n "$FILE"
+          python ml/train_demand.py --input "$FILE" --out ml/artifacts
+          python -m json.tool ml/artifacts/metrics.json > /dev/null
+          python -m json.tool ml/artifacts/model.json > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demand-model-research-report
+          path: |
+            02-buno-flow-commerce/ml/artifacts/model.json
+            02-buno-flow-commerce/ml/artifacts/metrics.json
+          retention-days: 30
+          if-no-files-found: error

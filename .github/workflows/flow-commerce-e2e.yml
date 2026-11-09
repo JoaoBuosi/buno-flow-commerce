@@ -1,0 +1,76 @@
+name: Flow Commerce - browser E2E (Spring + Postgres + React)
+on:
+  push:
+    branches: [feat/commerce-saas-mvp]
+    paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-e2e.yml']
+  pull_request:
+    paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-e2e.yml']
+permissions:
+  contents: read
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: commerce_e2e
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: ci-local-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d commerce_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      CI: true
+      SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/commerce_e2e?currentSchema=flow_commerce
+      SPRING_DATASOURCE_USERNAME: app
+      SPRING_DATASOURCE_PASSWORD: ci-local-only
+      COMMERCE_CORS_ORIGIN: http://127.0.0.1:5173
+      COMMERCE_ML_PILOT_ENABLED: false
+      COMMERCE_MAIL_ENABLED: false
+      COMMERCE_PILOT_INVITE_CODE: ci-private-test
+      E2E_PILOT_CODE: ci-private-test
+      VITE_API_URL: http://127.0.0.1:8080/api/v1
+      API_URL: http://127.0.0.1:8080/api/v1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: 02-buno-flow-commerce/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build Spring Boot API
+        working-directory: 02-buno-flow-commerce
+        run: mvn -B -DskipTests package
+      - name: Start Spring Boot and verify PostgreSQL connectivity
+        shell: bash
+        working-directory: 02-buno-flow-commerce
+        run: |
+          set -euo pipefail
+          nohup java -jar target/buno-flow-commerce-0.2.0-SNAPSHOT.jar > /tmp/buno-commerce-e2e-api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/actuator/health | grep -q UP; then exit 0; fi
+            sleep 2
+          done
+          tail -80 /tmp/buno-commerce-e2e-api.log
+          exit 1
+      - name: Install frontend dependencies
+        working-directory: 02-buno-flow-commerce/web
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium for Playwright
+        working-directory: 02-buno-flow-commerce/web
+        run: npx playwright install --with-deps chromium
+      - name: Test full merchant browser journeys and tenant separation
+        working-directory: 02-buno-flow-commerce/web
+        run: npm run test:e2e
