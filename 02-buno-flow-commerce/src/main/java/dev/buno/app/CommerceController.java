@@ -19,7 +19,8 @@ public class CommerceController {
   private final DemandInsights insights;
   private final StoreProfileService storeProfiles;
   private final OrderExportService exports;
-  public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports,DemandInsights insights,StoreProfileService storeProfiles,OrderExportService exports){this.auth=auth;this.orders=orders;this.imports=imports;this.insights=insights;this.storeProfiles=storeProfiles;this.exports=exports;}
+  private final PasswordResetService resets;
+  public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports,DemandInsights insights,StoreProfileService storeProfiles,OrderExportService exports,PasswordResetService resets){this.auth=auth;this.orders=orders;this.imports=imports;this.insights=insights;this.storeProfiles=storeProfiles;this.exports=exports;this.resets=resets;}
   public record Register(String email,String password,String storeName){}
   public record Login(String email,String password){}
   @PostMapping("/auth/register")
@@ -31,6 +32,18 @@ public class CommerceController {
   public AuthService.Token login(@RequestBody Login data){
     if(data==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
     return auth.login(data.email(),data.password());
+  }
+  @PostMapping("/auth/reset/request")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  public void requestReset(@RequestBody PasswordResetService.ResetRequest body){
+    if(body==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    resets.request(body.email());
+  }
+  @PostMapping("/auth/reset/complete")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void completeReset(@RequestBody PasswordResetService.ResetComplete body){
+    if(body==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    resets.complete(body.token(),body.newPassword());
   }
   @PostMapping("/auth/logout")
   @ResponseStatus(HttpStatus.NO_CONTENT)
