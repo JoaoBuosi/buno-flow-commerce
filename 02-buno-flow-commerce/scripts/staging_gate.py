@@ -36,7 +36,7 @@ def header(headers: dict[str, str], name: str) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Verifica saúde e segurança do staging sem gravar dados.")
+    parser = argparse.ArgumentParser(description="Verifica gateway privado do Railway sem gravar dados.")
     parser.add_argument("--api-origin", required=True, help="https://<host-da-api-railway>")
     parser.add_argument("--frontend-origin", required=True, help="https://<frontend-vercel>")
     args = parser.parse_args()
@@ -66,27 +66,27 @@ def main() -> int:
                      "/api/v1/dashboard", "/api/v1/store", "/api/v1/insights/demand")
         for endpoint in protected:
             code, h, _ = fetch(api + endpoint)
-            ok = code == 401 and header(h, "Cache-Control") == "no-store"
+            ok = code == 403 and header(h, "Cache-Control") == "no-store"
             check(f"{endpoint} rejeita sessão ausente e impede cache", ok, f"HTTP {code}")
 
         payload = json.dumps({"email": "no-invite@example.test",
             "password": "safe-test-password-no-invite", "storeName": "NEVER CREATE"}).encode()
         code, _, _ = fetch(api + "/api/v1/auth/register", "POST", {
             "Content-Type": "application/json"}, payload)
-        check("Cadastro sem convite recusado no backend", code == 403, f"HTTP {code}")
+        check("Cadastro direto sem credencial do gateway recusado", code == 403, f"HTTP {code}")
         # Note: HTTP 503 indicates missing deployment secret, which also blocks onboarding
         # but is not considered a configured, usable staging.
 
         preflight = {"Origin": frontend, "Access-Control-Request-Method": "GET",
                      "Access-Control-Request-Headers": "authorization,x-store-id"}
         code, headers, _ = fetch(api + "/api/v1/orders", "OPTIONS", preflight)
-        check("CORS permite apenas frontend de staging declarado",
-              code == 200 and header(headers, "Access-Control-Allow-Origin") == frontend,
+        check("CORS não expõe API diretamente ao navegador",
+              code == 403 and not header(headers, "Access-Control-Allow-Origin"),
               f"HTTP {code}")
         bad_origin = "https://unexpected-origin.invalid"
         code, headers, _ = fetch(api + "/api/v1/orders", "OPTIONS", {
             **preflight, "Origin": bad_origin})
-        check("CORS recusa origem não autorizada",
+        check("Origem externa não contorna o gateway",
               code == 403 and not header(headers, "Access-Control-Allow-Origin"),
               f"HTTP {code}")
     except (URLError, TimeoutError, OSError) as e:
