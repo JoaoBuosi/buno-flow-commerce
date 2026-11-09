@@ -13,6 +13,7 @@ test("lojistas isolados: cadastro, pedido, pagamento, CSV, auditoria, cancelamen
   await page.goto("/");
   await page.getByRole("button", { name: "Criar conta e loja" }).click();
   await page.getByLabel("Nome da loja").fill(shop);
+  await page.getByLabel("Código de convite do piloto").fill(process.env.E2E_PILOT_CODE || "ci-private-test");
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Senha").fill(password);
 
@@ -82,7 +83,10 @@ test("lojistas isolados: cadastro, pedido, pagamento, CSV, auditoria, cancelamen
   });
   expect((await audit.json()).some((e: {action: string}) => e.action === "CANCELED")).toBeTruthy();
 
+  const denied = await request.post(api + "/auth/register", { data: {email:"uninvited-" + id + "@example.test",password,storeName:"Sem convite"}});
+  expect(denied.status()).toBe(403);
   const b = await request.post(api + "/auth/register", {
+    headers: {"X-Pilot-Code":process.env.E2E_PILOT_CODE || "ci-private-test"},
     data: {email: "other-" + id + "@example.test", password, storeName: "Loja B " + id}
   });
   expect(b.status()).toBe(200);
