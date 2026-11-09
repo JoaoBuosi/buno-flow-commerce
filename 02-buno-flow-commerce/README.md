@@ -1,5 +1,7 @@
 # Buno Flow Commerce — backend MVP em desenvolvimento
 
+Banco no schema privado `flow_commerce`, fora do schema `public` exposto pela Data API do Supabase. Configurar `currentSchema=flow_commerce` na URL JDBC e `sslmode=require` no ambiente hospedado. Não conceder acesso ao schema a `anon`, `authenticated` ou `service_role` nem ativá-lo entre os schemas expostos. O banco e credenciais são exclusivos deste produto.
+
 Backend Java 21 / Spring Boot 3.4.5 / PostgreSQL 16 com Flyway e autenticação por token aleatório com hash SHA-256 persistido em banco. **Implementação em validação, não liberada para clientes reais**.
 
 ## Rodar no Windows PowerShell
@@ -41,7 +43,7 @@ Envie `Authorization: Bearer <token>` e `X-Store-Id: <uuid>` nos endpoints prote
 
 ## Testes
 ```powershell
-$env:SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/orders_test"
+$env:SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/orders_test?currentSchema=flow_commerce"
 $env:SPRING_DATASOURCE_USERNAME="app"
 $env:SPRING_DATASOURCE_PASSWORD="senha-local-forte"
 mvn test
