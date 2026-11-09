@@ -98,7 +98,7 @@ class CommerceIntegrationTest {
     mvc.perform(patch("/api/v1/orders/"+aId+"/status")
       .header("Authorization","Bearer "+storeA.token())
       .header("X-Store-Id",storeA.store()).contentType(MediaType.APPLICATION_JSON)
-      .content("{\\"status\\":\\"PAID\\"}")).andExpect(status().isOk());
+      .content("{\"status\":\"PAID\"}")).andExpect(status().isOk());
     mvc.perform(get("/api/v1/insights/demand").param("sku","SKU-1")
       .header("Authorization","Bearer "+storeA.token())
       .header("X-Store-Id",storeA.store()))
