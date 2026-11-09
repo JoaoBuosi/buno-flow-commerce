@@ -27,6 +27,7 @@ function App(){
  const [cancelReason,setCancelReason]=useState("");
  const [eventsLoading,setEventsLoading]=useState(false);
  const requestId=useRef(0);
+ const sessionRef=useRef<Session|null>(null);
  const [authMode,setAuthMode]=useState<"login"|"register"|"forgot"|"reset">(new URLSearchParams(window.location.search).has("reset_token")?"reset":"login");
  const [resetToken,setResetToken]=useState(new URLSearchParams(window.location.search).get("reset_token")||"");
  const [inviteCode,setInviteCode]=useState("");
@@ -41,7 +42,7 @@ function App(){
  const [search,setSearch]=useState("");const[status,setStatus]=useState("");const[notice,setNotice]=useState("");const[loading,setLoading]=useState(false);
  async function call(path:string,method="GET",body?:unknown,s:Session|null=session, extraHeaders:Record<string,string>={}){
   const res=await fetch(base+path,{method,headers:{"Content-Type":"application/json",...(s?{"Authorization":"Bearer "+s.accessToken,"X-Store-Id":s.storeId}:{}),...extraHeaders},body:body===undefined?undefined:JSON.stringify(body)});
-  if(!res.ok){let msg="Erro HTTP "+res.status;try{const data=await res.json();msg=data.detail||data.message||msg}catch{}if(res.status===401&&s){setSession(null);setOrders([]);setSelected(null)}throw new Error(msg)}
+  if(!res.ok){let msg="Erro HTTP "+res.status;try{const data=await res.json();msg=data.detail||data.message||msg}catch{}if(res.status===401&&s&&sessionRef.current?.accessToken===s.accessToken){requestId.current++;setSession(null);setOrders([]);setLatestOrders([]);setDashboard(null);setSelected(null)}throw new Error(msg)}
   return res.status===204?null:res.json();
  }
  async function requestRecovery(e:React.FormEvent){
@@ -60,7 +61,7 @@ function App(){
      setAuthMode("login");setNotice("Senha atualizada. Entre com a nova senha.");
    }catch(e){setNotice((e as Error).message)}finally{setLoading(false)}
  }
- async function authenticate(e:React.FormEvent){e.preventDefault();setLoading(true);try{const data=await call(authMode==="login"?"/auth/login":"/auth/register","POST",authMode==="login"?{email,password}:{email,password,storeName:shop},null,authMode==="register"?{"X-Pilot-Code":inviteCode}:{});setSession(data);setAuthMode("login");setPassword("");setInviteCode("");setNotice("Sessão iniciada");}catch(e){setNotice((e as Error).message)}finally{setLoading(false)}}
+ async function authenticate(e:React.FormEvent){e.preventDefault();setLoading(true);try{const data=await call(authMode==="login"?"/auth/login":"/auth/register","POST",authMode==="login"?{email,password}:{email,password,storeName:shop},null,authMode==="register"?{"X-Pilot-Code":inviteCode}:{});requestId.current++;setOrders([]);setLatestOrders([]);setDashboard(null);setSelected(null);setEvents([]);setStoreProfile(null);setCurrentUser(null);setSession(data);sessionRef.current=data;setAuthMode("login");setPassword("");setInviteCode("");setNotice("Sessão iniciada");}catch(e){setNotice((e as Error).message)}finally{setLoading(false)}}
  async function refresh(s:Session=session!,p=orderPage,q=search,f=status){
    if(!s)return;
    const sequence=++requestId.current;
@@ -141,8 +142,9 @@ function App(){
    await inspect(selected.id);await refresh();
   }catch(e){setNotice((e as Error).message)}finally{setLoading(false)}
  }
- async function logout(){try{await call("/auth/logout","POST")}catch{}setSession(null);setAuthMode("login");setSelected(null);setOrders([]);setLatestOrders([]);setEvents([]);setDashboard(null);setCurrentUser(null);setNotice("");setImportResult(null);window.history.replaceState(null,"","/");setPage("dashboard")}
- useEffect(()=>{if(!session)return;const timer=window.setTimeout(()=>{void refresh(session)},250);return()=>window.clearTimeout(timer)},[session,orderPage,search,status]);
+ async function logout(){try{await call("/auth/logout","POST")}catch{}requestId.current++;sessionRef.current=null;setSession(null);setAuthMode("login");setSelected(null);setOrders([]);setLatestOrders([]);setEvents([]);setDashboard(null);setCurrentUser(null);setNotice("");setImportResult(null);window.history.replaceState(null,"","/");setPage("dashboard")}
+ useEffect(()=>{sessionRef.current=session},[session]);
+  useEffect(()=>{if(!session)return;const timer=window.setTimeout(()=>{void refresh(session)},250);return()=>window.clearTimeout(timer)},[session,orderPage,search,status]);
  useEffect(()=>{setOrderPage(0)},[search,status]);
  useEffect(()=>{if(page==="settings"&&session)void loadStore()},[page,session]);
  useEffect(()=>{
