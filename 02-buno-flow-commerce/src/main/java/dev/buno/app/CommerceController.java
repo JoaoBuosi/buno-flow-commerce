@@ -17,7 +17,8 @@ public class CommerceController {
   private final OrderStore orders;
   private final OrderImportService imports;
   private final DemandInsights insights;
-  public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports,DemandInsights insights){this.auth=auth;this.orders=orders;this.imports=imports;this.insights=insights;}
+  private final StoreProfileService storeProfiles;
+  public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports,DemandInsights insights,StoreProfileService storeProfiles){this.auth=auth;this.orders=orders;this.imports=imports;this.insights=insights;this.storeProfiles=storeProfiles;}
   public record Register(String email,String password,String storeName){}
   public record Login(String email,String password){}
   @PostMapping("/auth/register")
@@ -34,6 +35,16 @@ public class CommerceController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void logout(@RequestHeader(value="Authorization",required=false)String token){auth.logout(token);}
   private AuthService.Session who(String token,String storeId){return auth.require(token,storeId);}
+  public record ChangePassword(String oldPassword,String newPassword){}
+  @PostMapping("/auth/change-password")
+  public AuthService.Token changePassword(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,@RequestBody ChangePassword body){
+    if(body==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    return auth.changePassword(who(token,store),body.oldPassword(),body.newPassword());
+  }
+  @GetMapping("/store")
+  public Map<String,Object> storeProfile(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store){return storeProfiles.get(who(token,store));}
+  @PatchMapping("/store")
+  public Map<String,Object> renameStore(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,@RequestBody StoreProfileService.Update body){return storeProfiles.rename(who(token,store),body==null?null:body.name());}
   @GetMapping("/me")
   public AuthService.Session me(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store){return who(token,store);}
   @PostMapping("/orders")
