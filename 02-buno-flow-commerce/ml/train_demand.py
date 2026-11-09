@@ -116,7 +116,8 @@ def train(input_path: Path, output_dir: Path) -> dict:
         "scale": [float(v) for v in scaler.scale_],
         "coefficients": [float(v) for v in model.coef_],
         "intercept": float(model.intercept_),
-        "target": "log1p(weekly positive unit demand)",\n        "prediction_guard": "min(expm1(clamp(raw,-20,12)),max(20,3*mean4+20,2*lag1+20))",
+        "target": "log1p(weekly positive unit demand)",
+        "prediction_guard": "min(expm1(clamp(raw,-20,12)),max(20,3*mean4+20,2*lag1+20))",
         "provenance": {"source": SOURCE, "doi": DOI, "license": "CC BY 4.0"},
         "evaluation": report,
     }
