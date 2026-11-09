@@ -35,7 +35,7 @@ test("lojistas isolados: cadastro, pedido, pagamento, CSV, auditoria, cancelamen
   await page.getByLabel("Preço").fill("19.90");
 
   const orderResponse = page.waitForResponse(r => r.url().endsWith("/api/v1/orders") && r.request().method() === "POST");
-  await page.getByRole("button", { name: "Criar pedido" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Criar pedido" }).click();
   const saved = await orderResponse;
   expect(saved.status()).toBe(201);
   const order = await saved.json();
