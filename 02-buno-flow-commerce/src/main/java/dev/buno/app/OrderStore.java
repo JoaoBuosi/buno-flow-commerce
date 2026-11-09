@@ -57,6 +57,28 @@ public class OrderStore {
     sql+=" ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?";args.add(size);args.add(page*size);
     return db.queryForList(sql,args.toArray());
   }
+  /** Counts are calculated across the whole tenant, never merely the displayed page. */
+  public Map<String,Object> dashboard(AuthService.Session user){
+    return db.queryForMap("""
+      SELECT count(*) AS order_count,
+        count(*) FILTER (WHERE status NOT IN ('CANCELED','DELIVERED')) AS active_count,
+        count(*) FILTER (WHERE status='DELIVERED') AS delivered_count,
+        count(*) FILTER (WHERE status='CANCELED') AS canceled_count,
+        coalesce(sum(total) FILTER (WHERE status<>'CANCELED'),0) AS order_value
+      FROM orders WHERE store_id=?
+      """,user.storeId());
+  }
+  public long count(AuthService.Session user,String status,String search){
+    String sql="SELECT count(*) FROM orders WHERE store_id=?";
+    List<Object> args=new ArrayList<>();args.add(user.storeId());
+    if(status!=null&&!status.isBlank()){checkStatus(status);sql+=" AND status=?";args.add(status);}
+    if(search!=null&&!search.isBlank()){
+      sql+=" AND lower(customer_name) LIKE ? ESCAPE '\\'";
+      args.add("%"+search.toLowerCase(java.util.Locale.ROOT).replace("%","\\%").replace("_","\\_")+"%");
+    }
+    return db.queryForObject(sql,Long.class,args.toArray());
+  }
+
   public Map<String,Object> detail(AuthService.Session user,UUID id){
     var list=db.queryForList("SELECT id,customer_name,status,total,cancellation_reason,created_at,updated_at,version FROM orders WHERE id=? AND store_id=?",id,user.storeId());
     if(list.isEmpty()) throw notFound();
