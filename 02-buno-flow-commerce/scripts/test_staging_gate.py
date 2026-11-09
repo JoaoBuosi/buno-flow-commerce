@@ -27,9 +27,9 @@ class StagingGateUnitTest(unittest.TestCase):
                 return 403, {}, b'{}'
             if method == "OPTIONS":
                 if headers["Origin"] == "https://frontend.vercel.app":
-                    return 200, {"Access-Control-Allow-Origin": "https://frontend.vercel.app"}, b""
+                    return 403, {}, b""
                 return 403, {}, b""
-            return 401, {"Cache-Control": "no-store"}, b""
+            return 403, {"Cache-Control": "no-store"}, b""
 
         with patch("sys.argv", ["gate", "--api-origin", "https://api.up.railway.app",
                                   "--frontend-origin", "https://frontend.vercel.app"]), \
@@ -47,7 +47,7 @@ class StagingGateUnitTest(unittest.TestCase):
                 if headers["Origin"] == "https://frontend.vercel.app":
                     return 200, {"Access-Control-Allow-Origin": "https://frontend.vercel.app"}, b""
                 return 403, {}, b""
-            return 401, {"Cache-Control": "no-store"}, b""
+            return 403, {"Cache-Control": "no-store"}, b""
 
         with patch("sys.argv", ["gate", "--api-origin", "https://api.up.railway.app",
                                   "--frontend-origin", "https://frontend.vercel.app"]), \
