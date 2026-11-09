@@ -124,6 +124,10 @@ jobs:
             psql -h 127.0.0.1 -U app -d orders_supabase_baseline -A -t \
             -c "SELECT version FROM flow_commerce.flyway_schema_history WHERE type='BASELINE' AND success=true LIMIT 1")
           test "$RESULT" = 3
+          INDEX_MIGRATION=$(docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" postgres:16-alpine \
+            psql -h 127.0.0.1 -U app -d orders_supabase_baseline -A -t \
+            -c "SELECT count(*) FROM flow_commerce.flyway_schema_history WHERE version='4' AND success=true")
+          test "$INDEX_MIGRATION" = 1
 
   frontend:
     runs-on: ubuntu-latest
