@@ -83,6 +83,48 @@ jobs:
             psql -h 127.0.0.1 -U app -d orders_restore_ci -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM flow_commerce.orders;"
           rm -f backup-ci.dump
 
+
+      - name: Verify Flyway baseline on Supabase-style prebootstrapped schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" postgres:16-alpine \
+            createdb -h 127.0.0.1 -U app orders_supabase_baseline
+          docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" postgres:16-alpine \
+            psql -h 127.0.0.1 -U app -d orders_supabase_baseline -v ON_ERROR_STOP=1 \
+            -c "CREATE SCHEMA flow_commerce;"
+          for sql in src/main/resources/db/migration/V1__commerce_core.sql \
+                     src/main/resources/db/migration/V2__order_imports.sql \
+                     src/main/resources/db/migration/V3__password_reset.sql; do
+            docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" \
+              -e PGOPTIONS="-c search_path=flow_commerce,public" \
+              -v "$PWD/src/main/resources/db/migration:/migrations:ro" postgres:16-alpine \
+              psql -h 127.0.0.1 -U app -d orders_supabase_baseline -v ON_ERROR_STOP=1 \
+              -f "/migrations/$(basename "$sql")"
+          done
+          SPRING_PROFILES_ACTIVE=supabase \
+          SPRING_DATASOURCE_URL='jdbc:postgresql://127.0.0.1:5432/orders_supabase_baseline?currentSchema=flow_commerce' \
+          SPRING_DATASOURCE_USERNAME=app \
+          SPRING_DATASOURCE_PASSWORD="$SPRING_DATASOURCE_PASSWORD" \
+          COMMERCE_CORS_ORIGIN=http://localhost:5173 PORT=8091 \
+          java -jar target/buno-flow-commerce-0.2.0-SNAPSHOT.jar > /tmp/supabase-baseline.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          READY=0
+          for i in $(seq 1 50); do
+            if curl -fsS http://localhost:8091/actuator/health | grep -q UP; then READY=1; break; fi
+            if ! kill -0 "$PID" 2>/dev/null; then break; fi
+            sleep 2
+          done
+          if [ "$READY" != 1 ]; then
+            tail -90 /tmp/supabase-baseline.log
+            exit 1
+          fi
+          RESULT=$(docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" postgres:16-alpine \
+            psql -h 127.0.0.1 -U app -d orders_supabase_baseline -A -t \
+            -c "SELECT version FROM flow_commerce.flyway_schema_history WHERE type='BASELINE' AND success=true LIMIT 1")
+          test "$RESULT" = 3
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
