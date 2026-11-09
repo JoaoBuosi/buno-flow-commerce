@@ -1,3 +1,4 @@
 package dev.buno.app;
-import org.springframework.data.jpa.repository.JpaRepository;
-public interface OrderRepository extends JpaRepository<Order,Long>{}
+/** Legacy prototype placeholder: see OrderStore for tenant-scoped persistence. */
+@Deprecated
+public final class OrderRepository { private OrderRepository() {} }
