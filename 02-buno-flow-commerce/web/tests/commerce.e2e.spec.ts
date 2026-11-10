@@ -31,6 +31,14 @@ test("lojistas isolados: cadastro, pedido, pagamento, CSV, auditoria, cancelamen
   expect(sessionA.storeId).toBeTruthy();
 
   await expect(page.getByRole("heading", { name: "Seus pedidos. Sob controle." })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Primeiros passos" })).toBeVisible();
+  await page.getByRole("button", { name: "Ver modelo CSV" }).click();
+  await expect(page.getByRole("heading", { name: "Importação CSV" })).toBeVisible();
+  const template = await request.get("/modelo-importacao.csv");
+  expect(template.ok()).toBeTruthy();
+  expect(await template.text()).toContain("order_key,customer,sku,description,quantity,price");
+  await page.locator("nav").getByRole("button", { name: /Pedidos/ }).click();
+  await expect(page.getByRole("heading", { name: "Gestão de pedidos." })).toBeVisible();
 
   await page.getByRole("button", { name: "+ Novo pedido" }).click();
   await page.getByLabel("Cliente").fill(customer);
