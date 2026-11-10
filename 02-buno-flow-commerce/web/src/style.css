@@ -4,3 +4,18 @@
 .logo .brandMark{width:46px;height:46px;flex:0 0 46px;border-radius:13px;object-fit:contain;background:#fff;box-shadow:0 4px 20px rgba(10,145,178,.16)}
 .logo strong{display:block;line-height:1.05;font-size:19px;letter-spacing:-.5px;white-space:nowrap}
 .logo strong small{display:block;margin-top:5px;color:#9aa7bc;font-size:10px;letter-spacing:1.1px;font-weight:650}
+
+
+/* Commercial MVP: dashboard and guided first-session layout. */
+.dashboardSections{display:grid;gap:18px}
+.onboarding{border-color:#245b65;background:linear-gradient(125deg,#15333b,#171d2d 72%)}
+.onboarding h2{font-size:22px;margin-top:10px}
+.onboardingSteps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+.onboardingSteps>div{display:flex;align-items:flex-start;gap:12px;flex-direction:column;background:#101a29;border:1px solid #37515e;padding:15px;border-radius:12px}
+.onboardingSteps strong{font-size:13px}
+.onboardingSteps .done{color:#7fdfc7;font-size:12px}
+.onboardingSteps button{min-height:40px}
+.fileLink{display:inline-flex;text-decoration:none;align-items:center;justify-content:center;margin:12px 0}
+.importArea{margin:18px 0;padding:18px;border:1px dashed #4b6a7b;border-radius:12px;background:#141e2b}
+.importArea input[type=file]{display:block;margin-top:12px;background:transparent;border:0;padding:6px 0;max-width:100%}
+@media(max-width:760px){.onboardingSteps{grid-template-columns:1fr}.onboardingSteps>div{flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap}.onboardingSteps button{width:auto}}
