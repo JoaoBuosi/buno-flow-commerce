@@ -1,0 +1,39 @@
+name: Flow Commerce - staging LIVE read-only smoke
+
+# This workflow checks ONLY the public/anonymous surface. It never signs in,
+# uploads files, accesses customer records or sends test emails.
+on:
+  push:
+    branches: [feat/flow-commerce-0.5.3-operational-readiness]
+    paths:
+      - .github/workflows/flow-commerce-live-readonly-smoke.yml
+      - 02-buno-flow-commerce/scripts/check_public_staging_health.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-surface:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: 02-buno-flow-commerce
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify read-only Railway/Vercel staging connectivity
+        env:
+          # Public service origins, NOT credentials. Update on new deployment.
+          FLOW_API_ORIGIN: https://flow-commerce-api-staging.up.railway.app
+          FLOW_WEB_ORIGIN: https://buno-flow-commerce-staging-qceavqx7h-joaobuosis-projects.vercel.app
+        run: |
+          python3 scripts/check_public_staging_health.py \
+            --api-origin "$FLOW_API_ORIGIN" \
+            --frontend-origin "$FLOW_WEB_ORIGIN"
+      - name: Clarify coverage and pending acceptance gates
+        run: |
+          echo 'The probe checks Railway health, direct API 403, and Vercel reachability.'
+          echo 'It does not validate merchant login, cross-tenant isolation, mail, backup restoration, or checkout.'
