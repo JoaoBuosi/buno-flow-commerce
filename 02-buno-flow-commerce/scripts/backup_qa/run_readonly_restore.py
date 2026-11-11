@@ -92,6 +92,9 @@ def main() -> int:
         source = restore.pg_env("FLOW_BACKUP_SOURCE_", "require")
         # Prevent writes even if the source credential is more privileged than necessary.
         source["PGOPTIONS"] = "-c default_transaction_read_only=on"
+        if restore.query("SELECT 1", source) != "1":
+            raise RuntimeError("Source read-only connectivity not established")
+        print("QA: Supabase SELECT-only source connection established", flush=True)
         target = restore.pg_env("FLOW_RESTORE_", "disable")
         dump_path = root / "flow-commerce-real.dump"
         restore.validate_output(dump_path, Path.cwd())
