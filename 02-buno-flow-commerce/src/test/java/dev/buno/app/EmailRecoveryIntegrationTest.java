@@ -89,6 +89,25 @@ class EmailRecoveryIntegrationTest {
     verifyNoInteractions(mail);
   }
 
+  @Test void expiredTokenIsRejectedWithoutUpdatingPassword() throws Exception {
+    Pilot user=register();
+    String raw="b".repeat(64);
+    String digest=java.util.HexFormat.of().formatHex(
+      java.security.MessageDigest.getInstance("SHA-256")
+        .digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    UUID userId=db.queryForObject("SELECT id FROM users WHERE email=?",UUID.class,user.email());
+    db.update("INSERT INTO password_resets(token_hash,user_id,expires_at) VALUES(?,?,now()-interval '1 minute')",
+      digest,userId);
+    mvc.perform(post("/api/v1/auth/reset/complete").contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsString(Map.of("token",raw,
+          "newPassword","should-not-work-2026"))))
+      .andExpect(status().isBadRequest());
+    mvc.perform(get("/api/v1/dashboard")
+        .header("Authorization","Bearer "+user.token())
+        .header("X-Store-Id",user.store()))
+      .andExpect(status().isOk());
+  }
+
   @Test void smtpFailureRollsBackResetTokenAndHidesProviderDetail() throws Exception {
     Pilot user=register();
     doThrow(new MailSendException("internal SMTP endpoint should never be exposed"))
