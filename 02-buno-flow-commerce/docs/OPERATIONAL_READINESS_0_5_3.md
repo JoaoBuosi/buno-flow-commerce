@@ -70,7 +70,7 @@ Remove-Item Env:\FLOW_RESTORE_PGPASSWORD
 ## 2. Envio de e-mail e recuperação (SMTP REAL desativado)
 - `PasswordResetService` já gera token opaco aleatório, armazena somente SHA-256, expira em 20 minutos, invalida token após uso e revoga sessões anteriores.
 - Esta PR adiciona testes de envio com `JavaMailSender` simulado, links únicos, e-mail inexistente sem enumeração por conteúdo, token expirado e rollback se SMTP falhar.
-- Em falha SMTP, retorno HTTP 503 genérico. Não incluir token, endereço pessoal ou informações do provedor nos logs.
+- Em falha SMTP, retorno HTTP **202 genérico**, igual ao de e-mail desconhecido, com rollback do token não enviado; o backend registra alerta sem dados pessoais. Evita enumeração de contas durante indisponibilidade. Não incluir token, endereço pessoal ou informações do provedor nos logs.
 - Para habilitar envios reais, primeiro escolher um provedor, verificar domínio/SPF/DKIM/DMARC e aprovar o remetente. Configurar **apenas no Railway Variables** SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, COMMERCE_MAIL_FROM, COMMERCE_FRONTEND_URL, SMTP_STARTTLS etc. **Não habilitar COMMERCE_MAIL_ENABLED=true antes de teste real e revisão**.
 - **Verificação de e-mail de cadastro ainda NÃO está implementada**. Conta é criada sem confirmar endereço, inadequado para liberação aberta; deve ser desenvolvida em incremento específico com revisão de migração, rate limiting e estados de conta.
 - O e-mail de recuperação depende de senha da conta existente. Teste E2E remoto com endereço controlado antes de liberar.
@@ -137,3 +137,15 @@ SMTP real e verificação de e-mail, monitor horário ativo em `main`, homologa�
 SSO com duas lojas sintéticas e documentos/condições legais e fiscais. A Action
 de *live smoke* roda apenas no PR de engenharia e **não** envia alertas recorrentes.
 O workflow de alertas por GitHub Issues permanece opt-in após revisão.
+
+
+## Verificação aprofundada do procedimento (11/11/2026)
+
+- A execução do helper de backup/restauração **em dois bancos PostgreSQL descartáveis do CI** foi validada de ponta a ponta no GitHub Actions, com ferramentas `pg_dump`/`pg_restore` versão 16 compatíveis com o servidor temporário.
+- O primeiro ensaio revelou incompatibilidade entre `pg_dump` 18 e servidor PostgreSQL 16. Corrigimos fixando a versão do cliente à do servidor do CI. **Para o Supabase PostgreSQL 17, o operador deverá usar ferramentas PostgreSQL 17**.
+- Verificação adicional elimina `PGHOSTADDR`, `PGSERVICE`, `PGSERVICEFILE` e outras opções herdadas que poderiam redirecionar uma restauração local para um host remoto.
+- **A restauração de dados reais permanece pendente**; o teste do CI usa exclusivamente dados sintéticos, e o arquivo de backup não é enviado como artefato.
+- O monitor de indisponibilidade foi configurado também como tarefa horária independente no ChatGPT, com aviso condicionado a falha confirmada. Isso **não ativa o workflow GitHub** enquanto estiver na branch de PR, nem prova a entrega de um alerta durante falha real.
+- Inspeção de configuração da API Railway: a chave `COMMERCE_MAIL_ENABLED` existe, mas **não estão presentes SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD ou COMMERCE_MAIL_FROM**. Não habilitar envio real até concluir verificação de domínio e remetente.
+
+A entrega de e-mail por SMTP externo não foi testada; há testes de serviço com SMTP simulado. Quando o provedor for contratado/configurado com acesso apropriado, realizar o teste em staging com uma conta de demonstração controlada, nunca com dados de terceiros.
