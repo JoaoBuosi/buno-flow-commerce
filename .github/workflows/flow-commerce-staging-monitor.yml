@@ -1,0 +1,71 @@
+name: Flow Commerce staging availability (read-only)
+
+on:
+  schedule:
+    # Github schedules only run from the default branch once this PR is reviewed/merged.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: flow-commerce-staging-health
+  cancel-in-progress: false
+
+jobs:
+  health:
+    runs-on: ubuntu-24.04
+    env:
+      FLOW_API_ORIGIN: ${{ vars.FLOW_COMMERCE_HEALTH_API_ORIGIN }}
+      FLOW_WEB_ORIGIN: ${{ vars.FLOW_COMMERCE_HEALTH_WEB_ORIGIN }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ISSUE_TITLE: "Flow Commerce staging: indisponibilidade detectada"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Inspect configuration (no URLs or secrets logged)
+        id: configured
+        shell: bash
+        run: |
+          if [ -z "$FLOW_API_ORIGIN" ] || [ -z "$FLOW_WEB_ORIGIN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Health monitoring not configured. Set both FLOW_COMMERCE_HEALTH_* repository variables."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Probe anonymous public surface without writing data
+        id: probe
+        if: steps.configured.outputs.configured == 'true'
+        continue-on-error: true
+        working-directory: 02-buno-flow-commerce
+        shell: bash
+        run: |
+          python3 scripts/check_public_staging_health.py \
+            --api-origin "$FLOW_API_ORIGIN" \
+            --frontend-origin "$FLOW_WEB_ORIGIN"
+      - name: Open one incident issue on failed checks or resolve on recovery
+        if: steps.configured.outputs.configured == 'true'
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.probe.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          issue=$(gh issue list --state open --limit 100 --json number,title \
+            --jq '.[] | select(.title == "Flow Commerce staging: indisponibilidade detectada") | .number' | head -1)
+          if [ "$OUTCOME" != "success" ]; then
+            if [ -z "$issue" ]; then
+              gh issue create --title "$ISSUE_TITLE" \
+                --body "A checagem somente leitura do staging falhou. Verificar o workflow: $RUN_URL. Nenhum dado de cliente, token ou segredo foi coletado."
+            fi
+            echo "::error::Health check failed. See run logs for status only."
+            exit 1
+          fi
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "Disponibilidade básica restaurada na verificação: $RUN_URL. Validar operação autenticada separadamente."
+            gh issue close "$issue" --reason completed
+          fi
