@@ -64,10 +64,14 @@ public class PasswordResetService {
     try {
       mail.send(message);
     } catch (org.springframework.mail.MailException exc) {
-      // The transaction rolls back the token if the provider is unreachable.
-      // Do not reveal SMTP infrastructure, account existence or message contents.
-      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-        "Envio temporariamente indisponível");
+      // Keep the HTTP response indistinguishable from an unknown address.
+      // A different 503 status for existing accounts would enable enumeration
+      // during an SMTP outage. Roll back the unsent token, but return normally.
+      org.springframework.transaction.interceptor.TransactionAspectSupport
+        .currentTransactionStatus().setRollbackOnly();
+      org.slf4j.LoggerFactory.getLogger(PasswordResetService.class)
+        .warn("Password recovery email delivery failed; token transaction rolled back");
+      return;
     }
   }
   @Transactional
