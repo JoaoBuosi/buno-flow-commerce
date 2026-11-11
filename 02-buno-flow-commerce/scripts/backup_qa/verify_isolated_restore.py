@@ -68,7 +68,23 @@ def run(args: list[str], env: dict[str, str], timeout: int = 120) -> str:
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError("Ferramenta PostgreSQL ausente ou operação excedeu o limite") from None
     if result.returncode:
-        # Never show upstream error text; pg utilities may reveal hostnames or sensitive context.
+        # Never reveal tool stderr; it can contain hostnames and connection details.
+        err = result.stderr.lower()
+        if any(term in err for term in ("could not connect", "connection refused", "connection timed out",
+                                       "network is unreachable", "no route to host", "timeout expired")):
+            category = "network"
+        elif "password authentication failed" in err or "authentication failed" in err:
+            category = "auth"
+        elif "permission denied" in err or "must be owner" in err:
+            category = "permissions"
+        elif "ssl" in err or "certificate" in err:
+            category = "tls"
+        elif "server version mismatch" in err:
+            category = "version"
+        else:
+            category = "other"
+        print("QA: PostgreSQL tool failed: " + args[0] + " category=" + category +
+              " exit=" + str(result.returncode), file=sys.stderr)
         raise RuntimeError("Comando PostgreSQL falhou; revise permissões e conectividade em ambiente seguro")
     return result.stdout.strip()
 
