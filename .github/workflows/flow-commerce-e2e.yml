@@ -1,7 +1,7 @@
 name: Flow Commerce - browser E2E (Spring + Postgres + React)
 on:
   push:
-    branches: [feat/commerce-saas-mvp, feat/flow-commerce-commercial-0.5, feat/flow-commerce-0.5.1-case26]
+    branches: [feat/commerce-saas-mvp, feat/flow-commerce-commercial-0.5, feat/flow-commerce-0.5.1-case26, feat/flow-commerce-0.5.2-demo-readiness]
     paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-e2e.yml']
   pull_request:
     paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-e2e.yml']
@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   browser-e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 22
     services:
       postgres:
@@ -68,9 +68,8 @@ jobs:
       - name: Install frontend dependencies
         working-directory: 02-buno-flow-commerce/web
         run: npm install --no-audit --no-fund
-      - name: Install Chromium for Playwright
-        working-directory: 02-buno-flow-commerce/web
-        run: npx playwright install --with-deps chromium
+      - name: Verify preinstalled Google Chrome on stable Ubuntu runner
+        run: google-chrome --version
       - name: Test full merchant browser journeys and tenant separation
         working-directory: 02-buno-flow-commerce/web
         run: npm run test:e2e
