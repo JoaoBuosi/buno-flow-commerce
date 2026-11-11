@@ -24,6 +24,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class PasswordResetService {
   private final JdbcTemplate db;
   private final JavaMailSender mail;
+  private final ResendEmailSender resend;
+  private final String provider;
   private final boolean enabled;
   private final String sender;
   private final String frontendUrl;
@@ -31,17 +33,22 @@ public class PasswordResetService {
   private final BCryptPasswordEncoder passwords=new BCryptPasswordEncoder(12);
 
   public PasswordResetService(JdbcTemplate db,ObjectProvider<JavaMailSender> mailSender,
+      ResendEmailSender resend,
+      @Value("${commerce.mail.provider:smtp}") String provider,
       @Value("${commerce.mail.enabled:false}") boolean enabled,
       @Value("${commerce.mail.from:}") String sender,
       @Value("${commerce.mail.frontend-url:http://localhost:5173}") String frontendUrl){
-    this.db=db;this.mail=mailSender.getIfAvailable();this.enabled=enabled;
+    this.db=db;this.mail=mailSender.getIfAvailable();this.resend=resend;
+    this.provider=provider;this.enabled=enabled;
     this.sender=sender;this.frontendUrl=frontendUrl;
   }
   public record ResetRequest(String email){}
   public record ResetComplete(String token,String newPassword){}
   @Transactional
   public void request(String email){
-    if(!enabled||mail==null||sender.isBlank()||!frontendUrl.startsWith("https://"))
+    boolean ready=("resend".equals(provider)&&resend.configured()) ||
+                  ("smtp".equals(provider)&&mail!=null);
+    if(!enabled||!ready||sender.isBlank()||!frontendUrl.startsWith("https://"))
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Envio de e-mail ainda não configurado");
     if(email==null||email.length()>254||!email.trim().matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"))
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"E-mail inválido");
@@ -62,7 +69,8 @@ public class PasswordResetService {
     message.setText("Para definir uma nova senha, abra este link (válido por 20 minutos):\n\n"+
       frontendUrl+"/?reset_token="+token+"\n\nSe você não solicitou, ignore esta mensagem.");
     try {
-      mail.send(message);
+      if("resend".equals(provider))resend.send(message);
+      else mail.send(message);
     } catch (org.springframework.mail.MailException exc) {
       // Keep the HTTP response indistinguishable from an unknown address.
       // A different 503 status for existing accounts would enable enumeration
