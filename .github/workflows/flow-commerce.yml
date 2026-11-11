@@ -39,6 +39,21 @@ jobs:
           cache: maven
           cache-dependency-path: 02-buno-flow-commerce/pom.xml
       - run: mvn -B clean verify
+      - name: Verify private schema integrity with SELECT-only nine-check SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESULT=$(docker run --rm --network host \
+            -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" \
+            -v "$PWD/scripts:/checks:ro" postgres:16-alpine \
+            psql -h 127.0.0.1 -U app -d orders_test -X -q -t -A -F '|' \
+            -v ON_ERROR_STOP=1 -f /checks/validate_flow_commerce_integrity.sql)
+          # All nine aggregate checks must equal zero; no customer records are emitted.
+          if [ "$RESULT" != '0|0|0|0|0|0|0|0|0' ]; then
+            echo "::error::Private schema referential/tenant integrity checks failed"
+            exit 1
+          fi
+          echo "PASSOU: nove verificações de integridade sem dados pessoais."
       - name: Verify non-destructive staging API release gate
         run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
       - name: Verify persistence across process restart
