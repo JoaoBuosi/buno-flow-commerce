@@ -126,8 +126,8 @@ jobs:
             -e FLOW_RESTORE_PGSSLMODE=disable \
             -v "$PWD/scripts:/scripts:ro" \
             -v "$BACKUP_TEMP:/secure-out" \
-            -w /tmp python:3.13-alpine sh -eu -c \
-            'apk add --no-cache postgresql-client >/dev/null; python /scripts/verify_isolated_restore.py --output /secure-out/ci-only.backup --execute'
+            -w /tmp postgres:16-alpine sh -eu -c \
+            'apk add --no-cache python3 >/dev/null; python3 /scripts/verify_isolated_restore.py --output /secure-out/ci-only.backup --execute'
           echo 'PASSOU: helper realizou backup/restauração integral em PostgreSQL temporário; não acessou Supabase.'
 
       - name: Verify Flyway baseline on Supabase-style prebootstrapped schema
