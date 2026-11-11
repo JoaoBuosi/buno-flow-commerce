@@ -1,7 +1,7 @@
 name: Flow Commerce backend integration
 on:
   push:
-    branches: [feat/commerce-saas-mvp, feat/flow-commerce-commercial-0.5, feat/flow-commerce-0.5.1-case26]
+    branches: [feat/commerce-saas-mvp, feat/flow-commerce-commercial-0.5, feat/flow-commerce-0.5.1-case26, feat/flow-commerce-0.5.2-demo-readiness]
   pull_request:
     paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce.yml']
 permissions:
@@ -143,4 +143,5 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: node --test tests/proxy.test.mjs
+      - run: node --check scripts/check-case26-remote.mjs
       - run: npm run build
