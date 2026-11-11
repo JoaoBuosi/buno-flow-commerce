@@ -61,7 +61,14 @@ public class PasswordResetService {
     message.setSubject("Buno Flow Commerce — recuperar acesso");
     message.setText("Para definir uma nova senha, abra este link (válido por 20 minutos):\n\n"+
       frontendUrl+"/?reset_token="+token+"\n\nSe você não solicitou, ignore esta mensagem.");
-    mail.send(message);
+    try {
+      mail.send(message);
+    } catch (org.springframework.mail.MailException exc) {
+      // The transaction rolls back the token if the provider is unreachable.
+      // Do not reveal SMTP infrastructure, account existence or message contents.
+      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+        "Envio temporariamente indisponível");
+    }
   }
   @Transactional
   public void complete(String token,String newPassword){
