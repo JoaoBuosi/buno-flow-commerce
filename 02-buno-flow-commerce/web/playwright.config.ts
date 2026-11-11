@@ -13,7 +13,7 @@ export default defineConfig({
     video: "off",
     ...devices["Desktop Chrome"]
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], ...(process.env.CI ? { channel: "chrome" as const } : {}) } }],
   webServer: process.env.EXTERNAL_FRONTEND_URL ? undefined : {
     command: "npm run dev -- --host 127.0.0.1 --port 5173",
     url: "http://127.0.0.1:5173",
