@@ -76,17 +76,19 @@ def main() -> int:
     socket_dir.mkdir(mode=0o700)
     started = False
     try:
+        print("QA: preparing loopback PostgreSQL 17 with RAM-backed data", flush=True)
         source_from_railway()
         restore_config()
         local_run(["initdb", "-D", str(data_dir), "--no-sync",
                    "--auth-local=trust", "--auth-host=trust"], timeout=100)
-        local_run(["pg_ctl", "-D", str(data_dir), "-o",
+        local_run(["pg_ctl", "-D", str(data_dir), "-l", str(root / "postgres.log"), "-o",
                    f"-c listen_addresses=127.0.0.1 -c unix_socket_directories={socket_dir} -p {PORT} -c fsync=off",
                    "-w", "start"], timeout=100)
         started = True
         local_run(["createdb", "-h", "127.0.0.1", "-p", PORT,
                    "-U", "postgres", DB_NAME], timeout=45)
 
+        print("QA: PostgreSQL local started; checking read-only source and empty destination", flush=True)
         source = restore.pg_env("FLOW_BACKUP_SOURCE_", "require")
         # Prevent writes even if the source credential is more privileged than necessary.
         source["PGOPTIONS"] = "-c default_transaction_read_only=on"
