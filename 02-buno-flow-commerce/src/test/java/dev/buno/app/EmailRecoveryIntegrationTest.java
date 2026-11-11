@@ -108,13 +108,19 @@ class EmailRecoveryIntegrationTest {
       .andExpect(status().isOk());
   }
 
-  @Test void smtpFailureRollsBackResetTokenAndHidesProviderDetail() throws Exception {
+  @Test void smtpFailureRollsBackTokenAndStillHidesAccountExistence() throws Exception {
     Pilot user=register();
     doThrow(new MailSendException("internal SMTP endpoint should never be exposed"))
       .when(mail).send(any(SimpleMailMessage.class));
     mvc.perform(post("/api/v1/auth/reset/request").contentType(MediaType.APPLICATION_JSON)
         .content(json.writeValueAsString(Map.of("email",user.email()))))
-      .andExpect(status().isServiceUnavailable());
+      .andExpect(status().isAccepted());
+
+    // Unknown and known addresses must return identical status during SMTP failure.
+    mvc.perform(post("/api/v1/auth/reset/request").contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsString(Map.of(
+          "email","absent-"+UUID.randomUUID()+"@example.test"))))
+      .andExpect(status().isAccepted());
 
     Integer pending=db.queryForObject("""
       SELECT count(*) FROM password_resets p JOIN users u ON p.user_id=u.id
