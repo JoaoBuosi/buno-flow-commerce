@@ -1,0 +1,63 @@
+"""Safety regression tests: no live DB credential or network needed."""
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import unittest
+from unittest.mock import patch
+
+from verify_isolated_restore import validate_target, validate_output, pg_env
+
+
+class IsolatedRestoreGuards(unittest.TestCase):
+    def test_refuse_any_remote_destination(self):
+        for host in ("flow-commerce.db.supabase.co", "10.10.0.2", "", "0.0.0.0", "db.internal"):
+            with self.subTest(host=host), self.assertRaises(ValueError):
+                validate_target(host, "flow_restore_ci")
+
+    def test_requires_prefixed_disposable_local_database(self):
+        for db in ("postgres", "orders", "production", "flow_commerce", "flow_restore_../bad", "flow_restore_"):
+            with self.subTest(db=db), self.assertRaises(ValueError):
+                validate_target("localhost", db)
+        validate_target("127.0.0.1", "flow_restore_ci_01")
+
+    def test_backup_never_overwrites_or_lives_inside_repo(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo = base / "checkout"
+            repo.mkdir()
+            private = base / "encrypted"
+            private.mkdir()
+            validate_output(private / "dump.backup", repo)
+            with self.assertRaises(ValueError):
+                validate_output(repo / "dump.backup", repo)
+            existing = private / "previous.backup"
+            existing.write_bytes(b"existing backup")
+            with self.assertRaises(FileExistsError):
+                validate_output(existing, repo)
+
+    def test_missing_config_fails_closed(self):
+        with patch.dict(os.environ, {
+                "FLOW_BACKUP_SOURCE_PGHOST": "",
+                "FLOW_BACKUP_SOURCE_PGPORT": "",
+                "FLOW_BACKUP_SOURCE_PGDATABASE": "",
+                "FLOW_BACKUP_SOURCE_PGUSER": ""}, clear=True):
+            with self.assertRaises(ValueError):
+                pg_env("FLOW_BACKUP_SOURCE_", "require")
+
+    def test_libhq_env_keeps_password_out_of_parameters(self):
+        with patch.dict(os.environ, {
+                "FLOW_RESTORE_PGHOST": "127.0.0.1",
+                "FLOW_RESTORE_PGPORT": "5432",
+                "FLOW_RESTORE_PGDATABASE": "flow_restore_ci",
+                "FLOW_RESTORE_PGUSER": "app",
+                "FLOW_RESTORE_PGPASSWORD": "not-for-logs",
+                "FLOW_RESTORE_PGSSLMODE": "disable"
+                }, clear=True):
+            variables = pg_env("FLOW_RESTORE_", "disable")
+            self.assertEqual(variables["PGHOST"], "127.0.0.1")
+            self.assertEqual(variables["PGPASSWORD"], "not-for-logs")
+            self.assertEqual(variables["PGSSLMODE"], "disable")
+
+
+if __name__ == "__main__":
+    unittest.main()
