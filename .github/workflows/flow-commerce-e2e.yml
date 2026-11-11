@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   browser-e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 22
     services:
       postgres:
