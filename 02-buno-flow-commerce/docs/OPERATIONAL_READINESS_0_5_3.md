@@ -105,3 +105,35 @@ Remove-Item Env:\FLOW_RESTORE_PGPASSWORD
 - Rollback: remover variáveis de monitor quando ativo, desabilitar SMTP, selecionar Vercel preview READY anterior. Mudanças no Java requerem redeploy aprovado da versão anterior; nunca realizar restore destrutivo sobre Supabase.
 
 **Nenhuma declaração de "piloto real liberado" até todas as evidências críticas.**
+
+
+## Evidência remota não destrutiva — 11/11/2026
+
+A verificação automatizada de disponibilidade foi executada pela GitHub Action de branch
+`.github/workflows/flow-commerce-live-readonly-smoke.yml` e **passou**:
+- API Railway `/actuator/health`: HTTP 200 e `status=UP`;
+- API `/api/v1/orders` acessada diretamente sem segredo do gateway: HTTP 403;
+- Staging privado da Vercel: host acessível (isso **não** substitui sessão SSO).
+
+Execução: https://github.com/JoaoBuosi/buno-flow-commerce/actions/runs/43038932227
+
+A verificação SQL `scripts/validate_flow_commerce_integrity.sql` foi executada no
+Supabase dedicado por conector autorizado, usando **somente SELECT**, e retornou
+**zero** para nove verificações: pedidos, itens, eventos, associação a lojas,
+importações, memberships, sessões e validação das FKs. Esse resultado **não**
+comprova isolamento entre usuários ou recuperação de backup. Não exibe dados pessoais.
+
+### Execução repetível
+
+Execute o SQL apenas com uma conta de leitura aprovada e sob conexão SSL/TLS:
+```powershell
+# PostgreSQL client instalado e conexão read-only previamente autenticada.
+# Não salve senha ou URI com credenciais no arquivo, GitHub ou PowerShell history.
+psql -X -v ON_ERROR_STOP=1 -f scripts/validate_flow_commerce_integrity.sql
+```
+
+**O que continua bloqueado:** restore de uma cópia real em PostgreSQL isolado,
+SMTP real e verificação de e-mail, monitor horário ativo em `main`, homologação
+SSO com duas lojas sintéticas e documentos/condições legais e fiscais. A Action
+de *live smoke* roda apenas no PR de engenharia e **não** envia alertas recorrentes.
+O workflow de alertas por GitHub Issues permanece opt-in após revisão.
