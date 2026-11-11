@@ -19,3 +19,22 @@
 .importArea{margin:18px 0;padding:18px;border:1px dashed #4b6a7b;border-radius:12px;background:#141e2b}
 .importArea input[type=file]{display:block;margin-top:12px;background:transparent;border:0;padding:6px 0;max-width:100%}
 @media(max-width:760px){.onboardingSteps{grid-template-columns:1fr}.onboardingSteps>div{flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap}.onboardingSteps button{width:auto}}
+
+
+/* CASE26 private rehearsal panel. Displayed only with ?case26=1 after merchant login. */
+.case26Guide{margin:0 0 24px;padding:22px;border:1px solid #397981;border-radius:16px;background:linear-gradient(135deg,#102d37 0%,#161d30 70%);box-shadow:0 12px 36px rgba(0,0,0,.14)}
+.case26GuideTop{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.case26Guide h2{font-size:22px;letter-spacing:-.45px;margin:8px 0}
+.case26Guide p{margin:7px 0 13px}
+.case26Label{flex-shrink:0;color:#9ee7d8;border:1px solid #2e7177;border-radius:20px;padding:6px 10px;font-size:10px;letter-spacing:.6px}
+.case26Steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:19px}
+.case26Steps>div{padding:15px;display:flex;flex-direction:column;gap:8px;background:#101b29;border:1px solid #2b4654;border-radius:12px;min-width:0}
+.case26Steps strong{font-size:12px;color:#d5f9f0}
+.case26Steps p{color:#aab9ca;font-size:12px;line-height:1.45;margin:0;flex:1}
+.case26Steps button{font-size:12px;min-height:39px;white-space:normal}
+.case26Steps .inline{gap:6px;flex-wrap:wrap}
+.case26Check{color:#aab9ca;font-size:11px;line-height:1.35}
+.case26Check.passed{color:#79debd}.case26Check.failed{color:#ffaeaf}
+.case26Disclosure{color:#aebdcc;font-size:11px;line-height:1.5;margin:18px 0 0!important}
+@media(max-width:1100px){.case26Steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.case26Guide{padding:16px}.case26GuideTop{display:block}.case26Label{display:inline-block;margin-top:8px}.case26Steps{grid-template-columns:1fr}.case26Steps>div{padding:14px}}
