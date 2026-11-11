@@ -61,6 +61,8 @@ public class AuthService {
     UUID store;
     try { store=UUID.fromString(storeHeader); } catch(Exception e){throw unauth();}
     String token=auth.substring(7);
+    // Reject malformed/oversized bearer values before hashing or querying the DB.
+    if(!token.matches("[0-9a-f]{64}")) throw unauth();
     var matches=db.queryForList(
       "SELECT u.id AS user_id,u.email,m.role FROM user_sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>now() AND m.store_id=?",
       hash(token),store);
@@ -80,7 +82,9 @@ public class AuthService {
     return issue(caller.userId(),caller.storeId(),caller.role());
   }
   public void logout(String auth) {
-    if(auth!=null && auth.startsWith("Bearer ")) db.update("DELETE FROM user_sessions WHERE token_hash=?",hash(auth.substring(7)));
+    if(auth!=null && auth.startsWith("Bearer ") &&
+       auth.length()==71 && auth.substring(7).matches("[0-9a-f]{64}"))
+      db.update("DELETE FROM user_sessions WHERE token_hash=?",hash(auth.substring(7)));
   }
   private static String hash(String token){
     try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8)));}
