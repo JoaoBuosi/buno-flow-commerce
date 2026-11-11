@@ -44,6 +44,25 @@ class IsolatedRestoreGuards(unittest.TestCase):
             with self.assertRaises(ValueError):
                 pg_env("FLOW_BACKUP_SOURCE_", "require")
 
+    def test_ambient_pg_hostaddr_cannot_redirect_local_restore(self):
+        with patch.dict(os.environ, {
+                "PGHOSTADDR": "203.0.113.50", "PGSERVICE": "production",
+                "PGSERVICEFILE": "/tmp/evil-services",
+                "PGOPTIONS": "-c search_path=production",
+                "PGTARGETSESSIONATTRS": "read-write",
+                "FLOW_RESTORE_PGHOST": "localhost",
+                "FLOW_RESTORE_PGPORT": "5432",
+                "FLOW_RESTORE_PGDATABASE": "flow_restore_qa",
+                "FLOW_RESTORE_PGUSER": "local",
+                "FLOW_RESTORE_PGSSLMODE": "disable"
+                }, clear=True):
+            env = pg_env("FLOW_RESTORE_", "disable")
+            self.assertEqual(env["PGHOST"], "localhost")
+            self.assertEqual(env["PGDATABASE"], "flow_restore_qa")
+            for key in ("PGHOSTADDR","PGSERVICE","PGSERVICEFILE","PGOPTIONS",
+                        "PGTARGETSESSIONATTRS"):
+                self.assertNotIn(key, env)
+
     def test_libhq_env_keeps_password_out_of_parameters(self):
         with patch.dict(os.environ, {
                 "FLOW_RESTORE_PGHOST": "127.0.0.1",
