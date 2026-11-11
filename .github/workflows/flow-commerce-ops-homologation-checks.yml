@@ -1,0 +1,44 @@
+name: Flow Commerce backup and Resend preflight checks
+on:
+  push:
+    branches: [feat/flow-commerce-0.5.3-backup-mail-homologation]
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/scripts/homologar_backup_real_windows.ps1'
+      - '02-buno-flow-commerce/scripts/verificar_dominio_resend.ps1'
+      - '02-buno-flow-commerce/scripts/verify_isolated_restore.py'
+      - '.github/workflows/flow-commerce-ops-homologation-checks.yml'
+permissions:
+  contents: read
+jobs:
+  validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse PowerShell scripts WITHOUT credentials or side effects
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(
+            '02-buno-flow-commerce/scripts/homologar_backup_real_windows.ps1',
+            '02-buno-flow-commerce/scripts/verificar_dominio_resend.ps1'
+          )
+          foreach ($file in $files) {
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file, [ref]$null, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count -gt 0) {
+              Write-Error "PowerShell syntax invalid: $file"
+              exit 1
+            }
+            Write-Host "PASSOU: $file - sintaxe valida (script NAO executado)"
+          }
+      - name: Python safety tests (no Supabase connection)
+        working-directory: 02-buno-flow-commerce
+        run: python3 -m unittest discover -s scripts -p 'test_verify_isolated_restore.py' -v
+      - name: Guard against accidental live-data execution
+        run: |
+          echo 'These checks only parse scripts and run offline tests.'
+          echo 'Real backup and Resend authentication require a local authorized operator.'
