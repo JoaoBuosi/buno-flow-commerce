@@ -42,6 +42,12 @@ def validate_output(path: Path, workdir: Path) -> None:
 
 def pg_env(prefix: str, default_ssl: str) -> dict[str, str]:
     env = os.environ.copy()
+    # libpq can route to an entirely different remote server via PGHOSTADDR
+    # even when PGHOST is localhost. Drop ambient overrides before building
+    # the explicitly approved source/destination connection.
+    for unsafe in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS",
+                   "PGTARGETSESSIONATTRS", "PGREQUIREAUTH", "PGCHANNELBINDING"):
+        env.pop(unsafe, None)
     for name in ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"):
         value = os.getenv(prefix + name, "").strip()
         if not value and name != "PGPASSWORD":
@@ -73,7 +79,9 @@ def query(sql: str, env: dict[str, str]) -> str:
 
 def verify(output: Path, source: dict[str, str], destination: dict[str, str]) -> None:
     validate_target(destination["PGHOST"], destination["PGDATABASE"])
-    if source["PGHOST"] == destination["PGHOST"] and source["PGDATABASE"] == destination["PGDATABASE"]:
+    if (source["PGHOST"] == destination["PGHOST"] and
+        source["PGPORT"] == destination["PGPORT"] and
+        source["PGDATABASE"] == destination["PGDATABASE"]):
         raise ValueError("O destino não pode ser a origem.")
     ready = query("""
       SELECT count(*) FROM pg_catalog.pg_tables
