@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 // CASE26 smoke: runs against the ephemeral PostgreSQL in GitHub Actions.
 // Never point this test at a live customer database.
@@ -8,7 +9,8 @@ test("CASE26 — roteiro demonstrável: painel, pedido, status, auditoria, CSV e
   const batch = stamp();
   const customer = "Cliente CASE26 " + batch;
 
-  await page.goto("/");
+  await page.goto("/?case26=1");
+  await expect(page.getByRole("region", { name: "Guia CASE26" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Bem-vindo de volta." })).toBeVisible();
   await expect(page.locator("img.brandMark").first()).toBeVisible();
 
@@ -21,6 +23,17 @@ test("CASE26 — roteiro demonstrável: painel, pedido, status, auditoria, CSV e
 
   await expect(page.getByRole("heading", { name: "Seus pedidos. Sob controle." })).toBeVisible();
   await expect(page.getByRole("region", { name: "Primeiros passos" })).toBeVisible();
+  const guide = page.getByRole("region", { name: "Guia CASE26" });
+  await expect(guide).toBeVisible();
+  await guide.getByRole("button", { name: "Verificar API e loja" }).click();
+  await expect(guide.getByRole("status")).toContainText("Conta e indicadores acessíveis");
+  const fixtureDownload = page.waitForEvent("download");
+  await guide.getByRole("button", { name: "CSV dia 26" }).click();
+  const demoFixture = await fixtureDownload;
+  expect(demoFixture.suggestedFilename()).toMatch(/^flow-commerce-case26-dia-26-[a-f0-9]{8}\.csv$/i);
+  const demoCsv = await readFile(await demoFixture.path()!);
+  expect(demoCsv.toString()).toContain("order_key,customer,sku,description,quantity,price");
+  expect(demoCsv.toString()).toContain("Cliente Demonstração");
 
   await page.getByRole("button", { name: "+ Novo pedido" }).click();
   await page.getByLabel("Cliente").fill(customer);
@@ -44,20 +57,14 @@ test("CASE26 — roteiro demonstrável: painel, pedido, status, auditoria, CSV e
 
   await page.locator("nav").getByRole("button", { name: /Arquivos e CSV/ }).click();
   await expect(page.getByRole("heading", { name: "Importação CSV" })).toBeVisible();
-  const csv = [
-    "order_key,customer,sku,description,quantity,price",
-    `CASE26-26-${batch}-001,Cliente Exemplo,CAMISETA-C26,Camiseta demonstrativa,2,39.90`,
-    `CASE26-26-${batch}-002,Cliente Teste,CANECA-C26,Caneca demonstrativa,1,25.00`,
-    ""
-  ].join("\n");
   const importing = page.waitForResponse(r => r.url().endsWith("/api/v1/orders/import") && r.request().method() === "POST");
   await page.locator('.importArea input[type="file"]').setInputFiles({
     name: "case26-pedidos.csv",
     mimeType: "text/csv",
-    buffer: Buffer.from(csv, "utf-8")
+    buffer: demoCsv
   });
   expect((await importing).status()).toBe(200);
-  await expect(page.getByRole("status")).toContainText("2 pedido(s) importado(s)");
+  await expect(page.getByRole("status")).toContainText("3 pedido(s) importado(s)");
 
   const downloading = page.waitForEvent("download");
   await page.getByRole("button", { name: "Exportar pedidos em CSV" }).click();
