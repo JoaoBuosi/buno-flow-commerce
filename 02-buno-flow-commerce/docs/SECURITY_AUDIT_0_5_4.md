@@ -54,3 +54,18 @@ Revisão dirigida do código Spring Boot/Java 21, PostgreSQL/Flyway, Vercel gate
 ## Critério de saída
 
 Não declarar produção pronta apenas pela aprovação do CI. Requer sucesso da implantação real, prova do IP por origem, domínio autenticado, backup durável, MFA/admin, análise de alertas e avaliação de segurança independente.
+
+
+## Homologação de staging — atualização 12/11/2026
+
+**Frontend Vercel:** deployment `dpl_Cwrjd7RhErgAYnrjAtQNt85nTXma` `READY`, servido pelo projeto `buno-flow-commerce-staging-web`; raiz de build corrigida para `02-buno-flow-commerce/web`; `VITE_API_URL=same-origin`.
+
+**API Railway:** Spring Boot 3.5.16 e pgJDBC 42.7.14 publicados e monitorados; API `flow-commerce-api` `SUCCESS`, uma réplica online. `COMMERCE_IP_RATE_LIMIT_ENABLED=true`; envio de e-mails segue desativado.
+
+**Migração:** tabela `flow_commerce.auth_ip_rate_limits` criada no Supabase pelo mecanismo de migrações e verificada com zero linhas inicialmente. Role de conexão `flow_commerce_staging_app` tem exclusivamente SELECT/INSERT/UPDATE/DELETE na tabela; `anon` não possui SELECT. A aplicação não migrou a tabela automaticamente porque a conexão existente não gerenciava o schema com Flyway nesta implantação. Caso seja criado outro ambiente com o mesmo modelo, replicar as grants ao papel específico, sem criar grants para PUBLIC.
+
+**Teste real controlado:** executor Railway descartável `flow-commerce-auth-ip-qa` enviou 32 solicitações com credenciais fictícias e IPs reservados. Resultado `QA_IP_RATE_LIMIT_RESULT=PASS blocked=429 distinct_client=401 sends=32`. A conta de teste inexistente não produziu usuário, pedido ou token. Executor removido após o teste. Evidência do deployment de QA `68e13b5e-1bee-4dcd-8458-4e0a39d1a71b`.
+
+**Revisão de CVEs:** backend, frontend/browser, CodeQL (Java e JS), npm audit, Trivy e Gitleaks concluíram com sucesso para o commit `6d6712f20b8864251711ab5109bed35925a98c25`, e para o commit de QA `c41a22df94a957a044afbed98f734dec54a924a6`. Aprovação de CI não substitui análise dos alertas individuais.
+
+**Pendências mantidas:** sem regra de WAF Vercel, pois a API Seawall respondeu 404; sem MFA para contas, sem domínio verificado de envio, sem retenção de backup cifrado, sem pentest externo. A integração de recuperação de senha via e-mail ainda depende de domínio e teste comercial completo.
