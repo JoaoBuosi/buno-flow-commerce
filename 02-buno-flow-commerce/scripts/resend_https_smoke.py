@@ -35,6 +35,8 @@ def main():
         headers={
             "Authorization": "Bearer " + key,
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "BunoFlowCommerceQA/0.5.3",
         },
         method="POST"
     )
@@ -63,6 +65,11 @@ def main():
                 category="invalid_json"
         header_type=re.sub(r"[^A-Za-z0-9/+._;-]", "", content_type)[:50]
         server=re.sub(r"[^A-Za-z0-9._/-]", "", exc.headers.get("Server","") if exc.headers else "")[:50]
+        if safe_message=="unavailable" and "text/plain" in content_type.lower():
+            candidate=exc.read(512).decode("utf-8",errors="replace")
+            candidate=re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+", "[email]", candidate)
+            candidate=re.sub(r"re_[A-Za-z0-9_-]+", "[secret]", candidate)
+            safe_message=re.sub(r"[^A-Za-z0-9 .,;:_()\\-/]", " ", candidate)[:220]
         print(f"RESEND_QA_RESULT=rejected HTTP={exc.code} content_type={header_type} server={server} category={category} detail={safe_message} one_message=true", flush=True)
         return 1
     except Exception:
