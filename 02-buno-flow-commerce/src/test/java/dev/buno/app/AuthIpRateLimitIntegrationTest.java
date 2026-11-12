@@ -37,6 +37,10 @@ class AuthIpRateLimitIntegrationTest {
     for(int i=0;i<30;i++) {
       mvc.perform(login(remote,"203.0.113."+((i%50)+1)))
         .andExpect(status().isUnauthorized());
+      Integer observed=db.queryForObject(
+        "SELECT max(requests) FROM flow_commerce.auth_ip_rate_limits WHERE route_family='login'",
+        Integer.class);
+      assertEquals(i+1,observed,"Each request must consume exactly one IP-rate slot");
     }
     mvc.perform(login(remote,"203.0.113.250"))
       .andExpect(status().isTooManyRequests());
