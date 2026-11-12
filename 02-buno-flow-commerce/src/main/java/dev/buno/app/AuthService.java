@@ -88,6 +88,7 @@ public class AuthService {
     if(oldPassword.equals(newPassword))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A nova senha deve ser diferente");
     db.update("UPDATE users SET password_hash=? WHERE id=?",passwords.encode(newPassword),caller.userId());
     db.update("DELETE FROM user_sessions WHERE user_id=?",caller.userId());
+    db.update("DELETE FROM owner_mfa_challenges WHERE user_id=?",caller.userId());
     // Caller passed require() and therefore has a verified OWNER session if MFA is active.
     return issue(caller.userId(),caller.storeId(),caller.role(),
       mfa.required() && "OWNER".equals(caller.role()));
