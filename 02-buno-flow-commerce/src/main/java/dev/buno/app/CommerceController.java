@@ -43,6 +43,21 @@ public class CommerceController {
     if(data==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
     return auth.login(data.email(),data.password());
   }
+  public record MfaSelfEnroll(String currentPassword) {}
+  @GetMapping("/auth/mfa/status")
+  public AuthService.MfaStatus mfaStatus(
+      @RequestHeader("Authorization") String token,
+      @RequestHeader("X-Store-Id") String store) {
+    return auth.mfaStatus(who(token,store));
+  }
+  @PostMapping("/auth/mfa/self/enroll")
+  public OwnerMfaService.Challenge beginVoluntaryMfa(
+      @RequestHeader("Authorization") String token,
+      @RequestHeader("X-Store-Id") String store,
+      @RequestBody MfaSelfEnroll request) {
+    if(request==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    return auth.beginVoluntaryMfa(who(token,store),request.currentPassword());
+  }
   public record MfaChallenge(String challengeToken) {}
   public record MfaVerify(String challengeToken,String code,String recoveryCode) {}
   @PostMapping("/auth/mfa/enroll/start")
