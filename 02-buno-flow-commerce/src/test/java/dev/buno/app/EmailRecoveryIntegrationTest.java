@@ -82,6 +82,36 @@ class EmailRecoveryIntegrationTest {
       .andExpect(status().isOk());
   }
 
+  @Test void secondRecoveryRequestInvalidatesTheEarlierLink() throws Exception {
+    Pilot user=register();
+    var requestBody=json.writeValueAsString(Map.of("email",user.email()));
+    for(int i=0;i<2;i++) {
+      mvc.perform(post("/api/v1/auth/reset/request").contentType(MediaType.APPLICATION_JSON)
+          .content(requestBody)).andExpect(status().isAccepted());
+    }
+    var messages=org.mockito.ArgumentCaptor.forClass(SimpleMailMessage.class);
+    verify(mail,times(2)).send(messages.capture());
+    var first=Pattern.compile("reset_token=([a-f0-9]{64})").matcher(messages.getAllValues().get(0).getText());
+    var second=Pattern.compile("reset_token=([a-f0-9]{64})").matcher(messages.getAllValues().get(1).getText());
+    assertTrue(first.find());
+    assertTrue(second.find());
+    String previousToken=first.group(1), currentToken=second.group(1);
+    assertNotEquals(previousToken,currentToken,"Every request must rotate the reset token");
+
+    mvc.perform(post("/api/v1/auth/reset/complete").contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsString(Map.of(
+          "token",previousToken,"newPassword","qa-first-unused-password-2026"))))
+      .andExpect(status().isBadRequest());
+    mvc.perform(post("/api/v1/auth/reset/complete").contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsString(Map.of(
+          "token",currentToken,"newPassword","qa-second-valid-password-2026"))))
+      .andExpect(status().isNoContent());
+    mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsString(Map.of(
+          "email",user.email(),"password","qa-second-valid-password-2026"))))
+      .andExpect(status().isOk());
+  }
+
   @Test void unknownAccountsStillGetAcceptedResponseWithoutEmail() throws Exception {
     mvc.perform(post("/api/v1/auth/reset/request").contentType(MediaType.APPLICATION_JSON)
         .content(json.writeValueAsString(Map.of("email","absent-"+UUID.randomUUID()+"@example.test"))))
