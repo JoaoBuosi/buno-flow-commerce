@@ -110,6 +110,8 @@ public class PasswordResetService {
     db.update("UPDATE users SET password_hash=? WHERE id=?",passwords.encode(newPassword),user);
     db.update("UPDATE password_resets SET used_at=now() WHERE token_hash=?",sha(token));
     db.update("DELETE FROM user_sessions WHERE user_id=?",user);
+    // A password reset invalidates every pending second-factor login challenge.
+    db.update("DELETE FROM owner_mfa_challenges WHERE user_id=?",user);
   }
   private static String sha(String input){
     try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8)));}

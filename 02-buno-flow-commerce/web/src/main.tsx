@@ -1,5 +1,7 @@
 import React,{useEffect,useState} from "react";import{createRoot}from"react-dom/client";import { downloadCase26Csv } from "./case26";import "./style.css";
 type Session={accessToken:string;storeId:string;role:string};
+type MfaChallenge={mfaRequired:true;enrollmentRequired:boolean;challengeToken:string;storeId:string;role:"OWNER"};
+type MfaEnrollment={secret:string;otpauthUri:string};
 type Item={sku:string;description:string;quantity:number;price:number};
 type Order={id:string;customer_name:string;status:string;total:number;items?:Item[];created_at:string};
 type Event={action:string;old_status:string|null;new_status:string|null;detail:string|null;occurred_at:string};
@@ -21,9 +23,13 @@ function App(){
  const [storeProfile,setStoreProfile]=useState<StoreProfile|null>(null);const[storeName,setStoreName]=useState("");
  const [oldPass,setOldPass]=useState("");const[newPass,setNewPass]=useState("");
  const [page,setPage]=useState<"dashboard"|"orders"|"files"|"intelligence"|"history"|"settings">("dashboard");
- const [authMode,setAuthMode]=useState<"login"|"register"|"forgot"|"reset">(new URLSearchParams(window.location.search).has("reset_token")?"reset":"login");
+ const [authMode,setAuthMode]=useState<"login"|"register"|"forgot"|"reset"|"mfa-setup"|"mfa-verify"|"mfa-recovery">(new URLSearchParams(window.location.search).has("reset_token")?"reset":"login");
  const [resetToken,setResetToken]=useState(new URLSearchParams(window.location.search).get("reset_token")||"");
  const [inviteCode,setInviteCode]=useState("");
+ const [mfaChallenge,setMfaChallenge]=useState<MfaChallenge|null>(null);
+ const [mfaEnrollment,setMfaEnrollment]=useState<MfaEnrollment|null>(null);
+ const [mfaCode,setMfaCode]=useState("");
+ const [mfaBackupCodes,setMfaBackupCodes]=useState<string[]>([]);
  const [email,setEmail]=useState("");const[password,setPassword]=useState("");const[shop,setShop]=useState("");
  const [orders,setOrders]=useState<Order[]>([]);
  const [recentOrders,setRecentOrders]=useState<Order[]>([]);
@@ -55,7 +61,39 @@ function App(){
      setAuthMode("login");setNotice("Senha atualizada. Entre com a nova senha.");
    }catch(e){setNotice((e as Error).message)}finally{setLoading(false)}
  }
- async function authenticate(e:React.FormEvent){e.preventDefault();setLoading(true);try{const data=await call(authMode==="login"?"/auth/login":"/auth/register","POST",authMode==="login"?{email,password}:{email,password,storeName:shop},null,authMode==="register"?{"X-Pilot-Code":inviteCode}:{});setSession(data);setAuthMode("login");setPassword("");setInviteCode("");setNotice("Sessão iniciada");}catch(e){setNotice((e as Error).message)}finally{setLoading(false)}}
+ async function authenticate(e:React.FormEvent){
+  e.preventDefault();setLoading(true);
+  try{
+    const data=await call(authMode==="login"?"/auth/login":"/auth/register","POST",authMode==="login"?{email,password}:{email,password,storeName:shop},null,authMode==="register"?{"X-Pilot-Code":inviteCode}:{});
+    setPassword("");setInviteCode("");setNotice("");
+    if(data.mfaRequired){
+      setMfaChallenge(data as MfaChallenge);setMfaEnrollment(null);setMfaCode("");
+      setAuthMode(data.enrollmentRequired?"mfa-setup":"mfa-verify");
+    } else {
+      setSession(data as Session);setAuthMode("login");setNotice("Sessão iniciada");
+    }
+  }catch(e){setNotice((e as Error).message)}finally{setLoading(false)}
+ }
+ async function setupMfa(){
+  if(!mfaChallenge)return;setLoading(true);
+  try{
+    const data=await call("/auth/mfa/enroll/start","POST",{challengeToken:mfaChallenge.challengeToken},null);
+    setMfaEnrollment(data as MfaEnrollment);setNotice("");
+  }catch(e){setNotice((e as Error).message)}finally{setLoading(false)}
+ }
+ async function completeMfa(e:React.FormEvent){
+  e.preventDefault();if(!mfaChallenge)return;setLoading(true);
+  try{
+    const path=authMode==="mfa-setup"?"/auth/mfa/enroll/complete":"/auth/mfa/login/verify";
+    const data=await call(path,"POST",{challengeToken:mfaChallenge.challengeToken,
+      code:authMode==="mfa-recovery"?null:mfaCode,
+      recoveryCode:authMode==="mfa-recovery"?mfaCode.toLowerCase():null},null);
+    setSession(data as Session);setMfaChallenge(null);setMfaEnrollment(null);setMfaCode("");setAuthMode("login");
+    if(Array.isArray(data.recoveryCodes)&&data.recoveryCodes.length){
+      setMfaBackupCodes(data.recoveryCodes);setNotice("2FA ativado. Guarde seus códigos de recuperação antes de continuar.");
+    }else{setNotice("Autenticação em duas etapas confirmada.")}
+  }catch(e){setNotice((e as Error).message)}finally{setLoading(false)}
+ }
  async function refresh(s:Session=session!,p=orderPage,q=search,f=status){
    if(!s)return;
    setLoading(true);
@@ -104,12 +142,14 @@ function App(){
    try{const name=downloadCase26Csv(day);setNotice("CSV fictício preparado: "+name+". Selecione esse arquivo em Importação CSV.")}
    catch{setNotice("Falha ao preparar o arquivo fictício. Tente novamente em um navegador atualizado.")}
  }
- async function logout(){try{await call("/auth/logout","POST")}catch{}setSession(null);setAuthMode("login");setSelected(null);setOrders([]);setEvents([]);setDemoConnectivity("unchecked")}
+ async function logout(){try{await call("/auth/logout","POST")}catch{}setSession(null);setMfaChallenge(null);setMfaEnrollment(null);setMfaBackupCodes([]);setAuthMode("login");setSelected(null);setOrders([]);setEvents([]);setDemoConnectivity("unchecked")}
  useEffect(()=>{if(!session)return;const timer=window.setTimeout(()=>{void refresh(session)},250);return()=>window.clearTimeout(timer)},[session,orderPage,search,status]);
  useEffect(()=>{setOrderPage(0)},[search,status]);
  useEffect(()=>{if(page==="settings"&&session)void loadStore()},[page,session]);
  const filtered=orders;
  if(!apiReady)return <div className="authPage"><div className="authCard"><div className="logo"><img className="brandMark" src="/branding/flow-commerce-logo.webp" width={46} height={46} alt="" /><strong>Flow Commerce<small>por Buno</small></strong></div><span className="eyebrow">FLOW COMMERCE · STAGING PRIVADO 0.4</span><h1>Frontend pronto. API ainda não conectada.</h1><p className="muted">O painel React já foi preparado para o ambiente de testes. A autenticação e os pedidos exigem a conexão HTTPS com o backend Java. A demonstração não deve prosseguir sem esse serviço.</p><p className="muted">Nenhum dado ou senha é enviado enquanto a conexão não estiver configurada.</p></div></div>;
+ if(session&&mfaBackupCodes.length>0)return <div className="authPage"><section className="authCard"><h1>Códigos de recuperação</h1><p className="muted">Salve estes oito códigos em um local seguro. Cada código funciona uma única vez. Eles não serão exibidos novamente.</p><div className="mfaCodes">{mfaBackupCodes.map((c)=><code key={c}>{c}</code>)}</div><button className="secondary" type="button" onClick={()=>{if(!navigator.clipboard){setNotice("Copie manualmente os códigos.");return;}void navigator.clipboard.writeText(mfaBackupCodes.join("\n")).then(()=>setNotice("Códigos copiados")).catch(()=>setNotice("Copie manualmente os códigos."))}}>Copiar códigos</button><button className="primary" type="button" onClick={()=>{setMfaBackupCodes([]);setNotice("Autenticação em duas etapas ativada.")}}>Já salvei os códigos; continuar</button>{notice&&<p role="status" className="notice">{notice}</p>}</section></div>;
+ if(!session&&mfaChallenge&&authMode.startsWith("mfa-"))return <div className="authPage"><section className="authCard"><span className="eyebrow">FLOW COMMERCE · ACESSO EM DUAS ETAPAS</span><h1>{authMode==="mfa-setup"?"Configure seu autenticador.":authMode==="mfa-recovery"?"Código de recuperação.":"Confirme seu código."}</h1><p className="muted">Esta etapa é obrigatória para responsáveis pelas lojas. O código nunca concede acesso sem a senha verificada.</p>{authMode==="mfa-setup"&&!mfaEnrollment&&<button className="primary" type="button" onClick={setupMfa} disabled={loading}>Gerar chave do autenticador</button>}{authMode==="mfa-setup"&&mfaEnrollment&&<><p>Adicione a conta no seu aplicativo autenticador usando esta chave:</p><code className="mfaSecret">{mfaEnrollment.secret}</code><a className="link" href={mfaEnrollment.otpauthUri}>Abrir aplicativo autenticador</a><p className="muted">Use Google Authenticator, Microsoft Authenticator ou outro aplicativo TOTP. A chave não deve ser compartilhada.</p></>}{(authMode!=="mfa-setup"||mfaEnrollment)&&<form className="stack" onSubmit={completeMfa}><label>{authMode==="mfa-recovery"?"Código de recuperação de uso único":"Código de 6 dígitos"}<input required type="text" inputMode={authMode==="mfa-recovery"?"text":"numeric"} autoComplete="one-time-code" pattern={authMode==="mfa-recovery"?"[a-fA-F0-9]{20}":"[0-9]{6}"} minLength={authMode==="mfa-recovery"?20:6} maxLength={authMode==="mfa-recovery"?20:6} value={mfaCode} onChange={e=>setMfaCode(e.target.value)} /></label><button className="primary" disabled={loading}>{loading?"Validando…":"Validar e entrar"}</button></form>}{authMode==="mfa-verify"&&<button className="link" type="button" onClick={()=>{setMfaCode("");setAuthMode("mfa-recovery")}}>Usar código de recuperação</button>}{authMode==="mfa-recovery"&&<button className="link" type="button" onClick={()=>{setMfaCode("");setAuthMode("mfa-verify")}}>Usar aplicativo autenticador</button>}<button className="link" type="button" onClick={()=>{setMfaChallenge(null);setMfaEnrollment(null);setMfaCode("");setAuthMode("login");setNotice("")}}>Cancelar e voltar ao login</button>{notice&&<p role="alert" className="notice">{notice}</p>}</section></div>;
  if(!session&&(authMode==="forgot"||authMode==="reset"))return <div className="authPage"><div className="authCard"><div className="logo"><img className="brandMark" src="/branding/flow-commerce-logo.webp" width={46} height={46} alt="" /><strong>Flow Commerce<small>por Buno</small></strong></div><span className="eyebrow">FLOW COMMERCE · RECUPERAR ACESSO</span><h1>{authMode==="forgot"?"Recuperar senha.":"Criar nova senha."}</h1><p className="muted">A recuperação usa um link de uso único que expira em 20 minutos. O envio exige um provedor de e-mail configurado.</p><form onSubmit={authMode==="forgot"?requestRecovery:completeRecovery} className="stack">{authMode==="forgot"?<label>E-mail cadastrado<input required type="email" value={email} onChange={e=>setEmail(e.target.value)}/></label>:<label>Nova senha<input required type="password" minLength={12} maxLength={72} value={password} onChange={e=>setPassword(e.target.value)}/></label>}<button className="primary" disabled={loading}>{loading?"Processando…":authMode==="forgot"?"Enviar instruções":"Atualizar senha"}</button></form><button className="link" onClick={()=>{setAuthMode("login");window.history.replaceState(null,"",window.location.pathname)}}>Voltar ao login</button>{notice&&<p role="status" className="notice">{notice}</p>}</div></div>;
  if(!session)return <div className="authPage"><div className="authCard"><div className="logo"><img className="brandMark" src="/branding/flow-commerce-logo.webp" width={46} height={46} alt="" /><strong>Flow Commerce<small>por Buno</small></strong></div><span className="eyebrow">FLOW COMMERCE · ACESSO SEGURO</span><h1>{authMode==="login"?"Bem-vindo de volta.":"Crie sua loja."}</h1><p className="muted">Conectado à API Spring Boot. Os dados são persistidos no PostgreSQL.</p><form onSubmit={authenticate} className="stack">{authMode==="register"&&<label>Nome da loja<input required maxLength={120} value={shop} onChange={e=>setShop(e.target.value)}/></label>}{authMode==="register"&&<label>Código de convite do piloto<input type="password" autoComplete="off" value={inviteCode} onChange={e=>setInviteCode(e.target.value)} placeholder="Código fornecido pela Buno"/></label>}<label>E-mail<input required type="email" value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Senha<input required type="password" minLength={12} value={password} onChange={e=>setPassword(e.target.value)}/></label><button className="primary" disabled={loading}>{loading?"Processando…":authMode==="login"?"Entrar":"Cadastrar e entrar"}</button></form><button className="link" onClick={()=>setAuthMode(authMode==="login"?"register":"login")}>{authMode==="login"?"Criar conta e loja":"Já possuo conta"}</button>{authMode==="login"&&<button className="link" onClick={()=>{setAuthMode("forgot");setNotice("")}}>Esqueci minha senha</button>}{notice&&<p role="alert" className="notice">{notice}</p>}<p className="muted">Não use dados de clientes reais durante os testes.</p></div></div>;
  return <div className="layout"><aside><div className="logo"><img className="brandMark" src="/branding/flow-commerce-logo.webp" width={46} height={46} alt="" /><strong>Flow Commerce<small>por Buno</small></strong></div><nav>{([["dashboard","◫ Visão geral"],["orders","▤ Pedidos"],["files","⇄ Arquivos e CSV"],["intelligence","◇ Inteligência"],["history","◷ Histórico"],["settings","⚙ Configurações"]] as const).map(([k,n])=><button key={k} className={page===k?"active":""} onClick={()=>setPage(k)}>{n}</button>)}</nav><div className="asideBottom">Loja ativa<br/><b>{session.storeId.slice(0,8)}…</b><p className="muted">Sessão de 12 horas. API autenticada.</p><button className="secondary" onClick={logout}>Sair</button></div></aside><main><header><span>Produtos / Flow Commerce / {page}</span><span className="tag" title="Staging privado — usar somente dados fictícios">● Staging privado</span></header><section className="hero"><div><span className="eyebrow">FLOW COMMERCE · GESTÃO DE PEDIDOS</span><h1>{page==="dashboard"?"Seus pedidos. Sob controle.":page==="orders"?"Gestão de pedidos.":page==="files"?"Importar e exportar pedidos.":page==="intelligence"?"Inteligência comercial.":page==="history"?"Histórico e auditoria.":"Configurações da loja."}</h1><p className="muted">Operações reais com autorização por loja e trilha de auditoria.</p></div><div className="inline"><button className="secondary" disabled={loading} onClick={()=>refresh()}>↻ Atualizar</button><button className="primary" onClick={()=>{setPage("orders");setShowNew(true)}}>+ Novo pedido</button></div></section>{case26Mode&&page==="dashboard"&&<section className="case26Guide" aria-label="Guia CASE26">

@@ -37,7 +37,10 @@ public class AuthIpRateLimitFilter extends OncePerRequestFilter {
     "/api/v1/auth/login",30,
     "/api/v1/auth/register",12,
     "/api/v1/auth/reset/request",10,
-    "/api/v1/auth/reset/complete",15
+    "/api/v1/auth/reset/complete",15,
+    "/api/v1/auth/mfa/enroll/start",10,
+    "/api/v1/auth/mfa/enroll/complete",10,
+    "/api/v1/auth/mfa/login/verify",12
   );
   private final JdbcTemplate db;
   private final boolean enabled;

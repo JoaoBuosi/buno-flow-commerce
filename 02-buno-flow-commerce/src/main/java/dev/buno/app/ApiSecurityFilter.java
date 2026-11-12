@@ -58,7 +58,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
       }
     }
 
-    if (!distributedLimiterEnabled && "POST".equals(method) && (path.equals("/api/v1/auth/login") || path.equals("/api/v1/auth/register") || path.equals("/api/v1/auth/reset/request"))) {
+    if (!distributedLimiterEnabled && "POST".equals(method) && (path.equals("/api/v1/auth/login") || path.equals("/api/v1/auth/register") || path.equals("/api/v1/auth/reset/request") || path.equals("/api/v1/auth/mfa/enroll/start") || path.equals("/api/v1/auth/mfa/enroll/complete") || path.equals("/api/v1/auth/mfa/login/verify"))) {
       // Use socket address only; untrusted X-Forwarded-For cannot bypass the limiter.
       String key=req.getRemoteAddr();
       long now=System.currentTimeMillis();
@@ -72,7 +72,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
       if(loginAttempts.size()>10_000) loginAttempts.entrySet().removeIf(e->now-e.getValue().since>WINDOW_MS);
     }
     // A malformed or absent auth header must be rejected before Spring dispatches a handler.
-    if(path.startsWith("/api/v1/") && !path.equals("/api/v1/auth/login") && !path.equals("/api/v1/auth/register") && !path.equals("/api/v1/auth/reset/request") && !path.equals("/api/v1/auth/reset/complete") &&
+    if(path.startsWith("/api/v1/") && !path.equals("/api/v1/auth/login") && !path.equals("/api/v1/auth/register") && !path.equals("/api/v1/auth/reset/request") && !path.equals("/api/v1/auth/reset/complete") && !path.equals("/api/v1/auth/mfa/enroll/start") && !path.equals("/api/v1/auth/mfa/enroll/complete") && !path.equals("/api/v1/auth/mfa/login/verify") &&
        !"OPTIONS".equals(method)){
       String header=req.getHeader("Authorization");
       String store=req.getHeader("X-Store-Id");

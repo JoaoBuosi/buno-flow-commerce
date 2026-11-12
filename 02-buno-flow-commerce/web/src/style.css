@@ -40,3 +40,11 @@
 @media(max-width:650px){.case26Guide{padding:16px}.case26GuideTop{display:block}.case26Label{display:inline-block;margin-top:8px}.case26Steps{grid-template-columns:1fr}.case26Steps>div{padding:14px}}
 
 .case26Fixture{margin:16px 0;padding:15px;border:1px solid #2d6b70;border-radius:12px;background:#12303a}.case26Fixture strong{font-size:13px;color:#d3f9ef}.case26Fixture .inline{flex-wrap:wrap;gap:8px}
+
+
+/* OWNER MFA enrollment and one-time recovery codes */
+.mfaSecret{display:block;overflow-wrap:anywhere;background:#0e1624;border:1px solid #556585;padding:13px;border-radius:10px;font-size:14px;letter-spacing:1.5px;margin:12px 0;color:#e9f3ff}
+.mfaCodes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:20px 0}
+.mfaCodes code{font-size:12px;text-align:center;background:#0d1927;color:#d5f2e8;border:1px solid #375b55;border-radius:9px;padding:11px 5px;overflow-wrap:anywhere}
+.authCard .mfaCodes+button{margin-right:8px}
+@media(max-width:450px){.mfaCodes{grid-template-columns:1fr}}

@@ -28,7 +28,7 @@ public class CommerceController {
   public record Register(String email,String password,String storeName){}
   public record Login(String email,String password){}
   @PostMapping("/auth/register")
-  public AuthService.Token register(@RequestHeader(value="X-Pilot-Code",required=false)String submittedCode,@RequestBody Register data){
+  public Object register(@RequestHeader(value="X-Pilot-Code",required=false)String submittedCode,@RequestBody Register data){
     if(data==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
     if(pilotOnly && pilotInviteCode.isBlank())
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Convites do piloto ainda não configurados");
@@ -39,9 +39,26 @@ public class CommerceController {
     return auth.register(data.email(),data.password(),data.storeName());
   }
   @PostMapping("/auth/login")
-  public AuthService.Token login(@RequestBody Login data){
+  public Object login(@RequestBody Login data){
     if(data==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
     return auth.login(data.email(),data.password());
+  }
+  public record MfaChallenge(String challengeToken) {}
+  public record MfaVerify(String challengeToken,String code,String recoveryCode) {}
+  @PostMapping("/auth/mfa/enroll/start")
+  public OwnerMfaService.Enrollment startMfaEnrollment(@RequestBody MfaChallenge request) {
+    if(request==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    return auth.startMfaEnrollment(request.challengeToken());
+  }
+  @PostMapping("/auth/mfa/enroll/complete")
+  public AuthService.EnrollmentComplete finishMfaEnrollment(@RequestBody MfaVerify request) {
+    if(request==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    return auth.completeMfaEnrollment(request.challengeToken(),request.code());
+  }
+  @PostMapping("/auth/mfa/login/verify")
+  public AuthService.Token verifyMfaLogin(@RequestBody MfaVerify request) {
+    if(request==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    return auth.completeMfaLogin(request.challengeToken(),request.code(),request.recoveryCode());
   }
   @PostMapping("/auth/reset/request")
   @ResponseStatus(HttpStatus.ACCEPTED)
