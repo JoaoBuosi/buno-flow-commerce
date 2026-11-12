@@ -43,7 +43,7 @@ jobs:
       - name: Audit direct and transitive npm dependencies
         run: |
           set -euo pipefail
-          npm install --ignore-scripts --no-fund
+          npm ci --ignore-scripts --no-fund
           npm audit --audit-level=high
   dependency-scan:
     name: Java + Node CVE scanning — Trivy
