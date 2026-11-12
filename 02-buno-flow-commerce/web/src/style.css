@@ -48,3 +48,6 @@
 .mfaCodes code{font-size:12px;text-align:center;background:#0d1927;color:#d5f2e8;border:1px solid #375b55;border-radius:9px;padding:11px 5px;overflow-wrap:anywhere}
 .authCard .mfaCodes+button{margin-right:8px}
 @media(max-width:450px){.mfaCodes{grid-template-columns:1fr}}
+
+/* CSP hardened: class instead of runtime style attribute */
+.forecastHeading{margin-top:12px}
