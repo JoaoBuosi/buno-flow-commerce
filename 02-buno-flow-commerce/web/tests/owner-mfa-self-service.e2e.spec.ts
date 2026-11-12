@@ -10,7 +10,7 @@ test("OWNER ativa 2FA voluntariamente em Configurações sem perder acesso antes
   });
   await page.route("**/api/v1/auth/mfa/status",async route=>{
     await route.fulfill({status:200,contentType:"application/json",
-      body:JSON.stringify({enrolled:enabled,required:enabled})});
+      body:JSON.stringify({enrolled:enabled,required:enabled,enrollmentAvailable:true})});
   });
   await page.route("**/api/v1/auth/mfa/self/enroll",async route=>{
     enrollCalls++;
