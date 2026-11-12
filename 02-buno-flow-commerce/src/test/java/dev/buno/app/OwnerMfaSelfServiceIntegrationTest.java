@@ -22,6 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties={
   "commerce.mfa.owner-required=false",
   "commerce.mfa.pilot-email=",
+  "commerce.mfa.self-enrollment-enabled=true",
   "commerce.edge-required=false",
   "commerce.security.ip-rate-limit-enabled=false",
   "commerce.mail.enabled=false"
