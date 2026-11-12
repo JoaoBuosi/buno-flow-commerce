@@ -1,7 +1,7 @@
 name: Flow Commerce - browser E2E (Spring + Postgres + React)
 on:
   push:
-    branches: [feat/commerce-saas-mvp, feat/flow-commerce-commercial-0.5, feat/flow-commerce-0.5.1-case26, feat/flow-commerce-0.5.2-demo-readiness]
+    branches: [feat/commerce-saas-mvp, feat/flow-commerce-commercial-0.5, feat/flow-commerce-0.5.1-case26, feat/flow-commerce-0.5.2-demo-readiness, feat/flow-commerce-0.5.3-operational-readiness]
     paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-e2e.yml']
   pull_request:
     paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-e2e.yml']
@@ -67,7 +67,7 @@ jobs:
           exit 1
       - name: Install frontend dependencies
         working-directory: 02-buno-flow-commerce/web
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Verify preinstalled Google Chrome on stable Ubuntu runner
         run: google-chrome --version
       - name: Test full merchant browser journeys and tenant separation

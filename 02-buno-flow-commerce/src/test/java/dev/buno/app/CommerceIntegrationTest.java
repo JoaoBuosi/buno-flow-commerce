@@ -151,6 +151,10 @@ class CommerceIntegrationTest {
     assertTrue(exportA.contains("SKU-1"));
     assertFalse(exportB.contains("SKU-1"));
     assertEquals("'=1+1",OrderExportService.safe("=1+1"));
+    assertEquals("'  =SUM(A1:A2)",OrderExportService.safe("  =SUM(A1:A2)"));
+    assertEquals("'\n@SUM(A1)",OrderExportService.safe("\n@SUM(A1)"));
+    assertEquals("'\uFEFF+1",OrderExportService.safe("\uFEFF+1"));
+    assertEquals("Cliente normal",OrderExportService.safe("Cliente normal"));
   }
 
   @Autowired org.springframework.jdbc.core.JdbcTemplate verificationDb;

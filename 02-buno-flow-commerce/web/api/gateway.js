@@ -72,6 +72,13 @@ export default async function handler(req, res) {
     if (typeof value === "string") headers.set(name, value);
   }
   headers.set("X-Buno-Edge-Key", secret);
+  // Only read Vercel-managed identity. Never forward client-controlled
+  // X-Forwarded-For, X-Real-IP, or X-Buno-Client-IP directly.
+  const managedIp = req.headers["x-vercel-forwarded-for"];
+  if (typeof managedIp === "string" && managedIp.length <= 45 &&
+      /^[0-9a-fA-F:.]{3,45}$/.test(managedIp) && !managedIp.includes(",")) {
+    headers.set("X-Buno-Client-IP", managedIp);
+  }
   const target = new URL(apiPath + incoming.search, origin);
   try {
     const upstream = await fetch(target, {

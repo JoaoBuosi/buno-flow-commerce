@@ -25,6 +25,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
   private static final int MAX_ATTEMPTS=20;
   @Value("${commerce.edge-required:false}") private boolean edgeRequired;
   @Value("${commerce.edge-secret:}") private String edgeSecret;
+  @Value("${commerce.security.ip-rate-limit-enabled:false}") private boolean distributedLimiterEnabled;
   private final ConcurrentHashMap<String,Counter> loginAttempts=new ConcurrentHashMap<>();
   private static final class Counter { long since; int used; Counter(long now){since=now;used=0;} }
 
@@ -57,7 +58,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
       }
     }
 
-    if ("POST".equals(method) && (path.equals("/api/v1/auth/login") || path.equals("/api/v1/auth/register") || path.equals("/api/v1/auth/reset/request"))) {
+    if (!distributedLimiterEnabled && "POST".equals(method) && (path.equals("/api/v1/auth/login") || path.equals("/api/v1/auth/register") || path.equals("/api/v1/auth/reset/request"))) {
       // Use socket address only; untrusted X-Forwarded-For cannot bypass the limiter.
       String key=req.getRemoteAddr();
       long now=System.currentTimeMillis();

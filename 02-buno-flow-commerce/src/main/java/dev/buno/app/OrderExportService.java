@@ -43,7 +43,15 @@ public class OrderExportService {
   static String safe(Object value){
     String text=String.valueOf(value==null?"":value);
     if(text.isEmpty())return text;
-    char first=text.charAt(0);
-    return first=='='||first=='+'||first=='-'||first=='@'||first=='\t'||first=='\r'?"'"+text:text;
+    // Spreadsheet apps may ignore whitespace, BOM or zero-width prefix before a formula.
+    int offset=0;
+    while(offset<text.length()){
+      int cp=text.codePointAt(offset);
+      if(!Character.isWhitespace(cp) && cp!=0xFEFF && cp!=0x200B)break;
+      offset+=Character.charCount(cp);
+    }
+    if(offset==text.length())return text;
+    char first=text.charAt(offset);
+    return first=='='||first=='+'||first=='-'||first=='@'?"'"+text:text;
   }
 }

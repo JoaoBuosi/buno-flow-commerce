@@ -1,7 +1,7 @@
 name: Flow Commerce backend integration
 on:
   push:
-    branches: [feat/commerce-saas-mvp, feat/flow-commerce-commercial-0.5, feat/flow-commerce-0.5.1-case26, feat/flow-commerce-0.5.2-demo-readiness]
+    branches: [feat/commerce-saas-mvp, feat/flow-commerce-commercial-0.5, feat/flow-commerce-0.5.1-case26, feat/flow-commerce-0.5.2-demo-readiness, feat/flow-commerce-0.5.3-operational-readiness]
   pull_request:
     paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce.yml']
 permissions:
@@ -39,6 +39,21 @@ jobs:
           cache: maven
           cache-dependency-path: 02-buno-flow-commerce/pom.xml
       - run: mvn -B clean verify
+      - name: Verify private schema integrity with SELECT-only nine-check SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESULT=$(docker run --rm --network host \
+            -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" \
+            -v "$PWD/scripts:/checks:ro" postgres:16-alpine \
+            psql -h 127.0.0.1 -U app -d orders_test -X -q -t -A -F '|' \
+            -v ON_ERROR_STOP=1 -f /checks/validate_flow_commerce_integrity.sql)
+          # All nine aggregate checks must equal zero; no customer records are emitted.
+          if [ "$RESULT" != '0|0|0|0|0|0|0|0|0' ]; then
+            echo "::error::Private schema referential/tenant integrity checks failed"
+            exit 1
+          fi
+          echo "PASSOU: nove verificações de integridade sem dados pessoais."
       - name: Verify non-destructive staging API release gate
         run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
       - name: Verify persistence across process restart
@@ -85,6 +100,35 @@ jobs:
             psql -h 127.0.0.1 -U app -d orders_restore_ci -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM flow_commerce.orders;"
           rm -f backup-ci.dump
 
+
+      - name: End-to-end isolated restore helper against disposable CI PostgreSQL ONLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          # NEVER use production hostnames, PGPASSWORD or actual user data here.
+          docker run --rm --network host -e PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" postgres:16-alpine \
+            createdb -h 127.0.0.1 -U app flow_restore_ci_053
+          BACKUP_TEMP=$(mktemp -d)
+          chmod 700 "$BACKUP_TEMP"
+          trap 'rm -rf "$BACKUP_TEMP"' EXIT
+          docker run --rm --network host \
+            -e FLOW_BACKUP_SOURCE_PGHOST=127.0.0.1 \
+            -e FLOW_BACKUP_SOURCE_PGPORT=5432 \
+            -e FLOW_BACKUP_SOURCE_PGDATABASE=orders_test \
+            -e FLOW_BACKUP_SOURCE_PGUSER=app \
+            -e FLOW_BACKUP_SOURCE_PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" \
+            -e FLOW_BACKUP_SOURCE_PGSSLMODE=disable \
+            -e FLOW_RESTORE_PGHOST=127.0.0.1 \
+            -e FLOW_RESTORE_PGPORT=5432 \
+            -e FLOW_RESTORE_PGDATABASE=flow_restore_ci_053 \
+            -e FLOW_RESTORE_PGUSER=app \
+            -e FLOW_RESTORE_PGPASSWORD="$SPRING_DATASOURCE_PASSWORD" \
+            -e FLOW_RESTORE_PGSSLMODE=disable \
+            -v "$PWD/scripts:/scripts:ro" \
+            -v "$BACKUP_TEMP:/secure-out" \
+            -w /tmp postgres:16-alpine sh -eu -c \
+            'apk add --no-cache python3 >/dev/null; python3 /scripts/verify_isolated_restore.py --output /secure-out/ci-only.backup --execute'
+          echo 'PASSOU: helper realizou backup/restauração integral em PostgreSQL temporário; não acessou Supabase.'
 
       - name: Verify Flyway baseline on Supabase-style prebootstrapped schema
         shell: bash
@@ -141,7 +185,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: node --test tests/proxy.test.mjs
       - run: node --check scripts/check-case26-remote.mjs
       - run: npm run build

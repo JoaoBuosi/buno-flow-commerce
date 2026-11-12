@@ -1,0 +1,97 @@
+name: Flow Commerce — Security SAST and dependency audit
+on:
+  push:
+    branches: [feat/flow-commerce-0.5.3-operational-readiness]
+    paths:
+      - '02-buno-flow-commerce/**'
+      - '.github/workflows/flow-commerce-security.yml'
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/**'
+      - '.github/workflows/flow-commerce-security.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '30 8 * * 1'
+permissions:
+  contents: read
+jobs:
+  secrets:
+    name: Secret scanning — Gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+  frontend-dependencies:
+    name: Frontend CVEs — npm audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 02-buno-flow-commerce/web
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit direct and transitive npm dependencies
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-fund
+          npm audit --audit-level=high
+  dependency-scan:
+    name: Java + Node CVE scanning — Trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '02-buno-flow-commerce'
+          scanners: 'vuln'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+  codeql:
+    name: CodeQL SAST — ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: java-kotlin
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        if: matrix.language == 'java-kotlin'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      - name: Build Java for CodeQL analysis
+        if: matrix.language == 'java-kotlin'
+        run: mvn -B -DskipTests -f 02-buno-flow-commerce/pom.xml package
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
