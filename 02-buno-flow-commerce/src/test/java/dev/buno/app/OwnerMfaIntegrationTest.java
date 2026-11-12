@@ -172,6 +172,36 @@ class OwnerMfaIntegrationTest {
       Integer.class,digest(challenge)));
   }
 
+  @Test void passwordResetRevokesOutstandingMfaChallengeButKeepsTotpEnrollment() throws Exception {
+    String email="owner-mfa-"+UUID.randomUUID()+"@example.test";
+    JsonNode initial=postApi("/auth/register",Map.of(
+      "email",email,"password",OLD_PASSWORD,"storeName","Loja Reset QA"),200);
+    String store=initial.get("storeId").asText();
+    Enrolled enrolled=enroll(email,initial.get("challengeToken").asText(),store);
+    JsonNode challenge=postApi("/auth/login",Map.of(
+      "email",email,"password",OLD_PASSWORD),200);
+    String resetToken="f".repeat(64);
+    UUID uid=db.queryForObject("SELECT id FROM users WHERE email=?",UUID.class,email);
+    db.update("INSERT INTO password_resets(token_hash,user_id,expires_at) VALUES(?,?,now()+interval '20 minutes')",
+      digest(resetToken),uid);
+    postApi("/auth/reset/complete",Map.of(
+      "token",resetToken,"newPassword","new-secure-password-after-reset"),204);
+    postApi("/auth/mfa/login/verify",Map.of(
+      "challengeToken",challenge.get("challengeToken").asText(),
+      "recoveryCode",enrolled.recoveryCode()),401);
+    postApi("/auth/login",Map.of(
+      "email",email,"password",OLD_PASSWORD),401);
+    JsonNode next=postApi("/auth/login",Map.of(
+      "email",email,"password","new-secure-password-after-reset"),200);
+    assertTrue(next.get("mfaRequired").asBoolean());
+    assertFalse(next.get("enrollmentRequired").asBoolean());
+    assertFalse(next.has("accessToken"),"Password reset must not disable MFA");
+    mvc.perform(get("/api/v1/me")
+      .header("Authorization","Bearer "+enrolled.accessToken())
+      .header("X-Store-Id",store))
+      .andExpect(status().isUnauthorized());
+  }
+
   @Test void staffWithoutOwnerMembershipStillReceivesRegularSession() throws Exception {
     UUID uid=UUID.randomUUID(),store=UUID.randomUUID();
     String email="staff-mfa-"+UUID.randomUUID()+"@example.test";
