@@ -104,6 +104,12 @@ jobs:
           grep -qi '^content-security-policy:' <<<"$headers"
           grep -qi '^referrer-policy: no-referrer' <<<"$headers"
           echo 'Local target, security headers and anonymous API denials verified'
+      - name: Browser smoke with enforced production CSP
+        working-directory: 02-buno-flow-commerce/web
+        env:
+          EXTERNAL_FRONTEND_URL: 'true'
+          FRONTEND_URL: http://127.0.0.1:5173
+        run: npx playwright test tests/csp-isolated.e2e.spec.ts
       - name: Pull official ZAP image
         run: docker pull ghcr.io/zaproxy/zaproxy:stable
       - name: ZAP passive baseline - app plus protected GET API discovery
