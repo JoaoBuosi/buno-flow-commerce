@@ -5,6 +5,7 @@ Requires RESEND_API_KEY, RESEND_QA_RECIPIENT and RESEND_QA_CONFIRM=send-one.
 Designed as a disposable Railway service, never a background worker.
 """
 import json
+import re
 import os
 import ssl
 import sys
@@ -44,7 +45,23 @@ def main():
             print(f"RESEND_QA_RESULT=accepted HTTP={code} one_message=true", flush=True)
             return 0 if code in (200, 201, 202) else 1
     except urllib.error.HTTPError as exc:
-        print(f"RESEND_QA_RESULT=rejected HTTP={exc.code} one_message=true", flush=True)
+        # Provider diagnostics only. Never echo raw HTML, email addresses or API keys.
+        category="unknown"
+        safe_message="unavailable"
+        content_type=exc.headers.get("Content-Type", "") if exc.headers else ""
+        if "json" in content_type.lower():
+            try:
+                body=json.loads(exc.read(2048).decode("utf-8",errors="replace"))
+                if isinstance(body, dict):
+                    category=re.sub(r"[^a-zA-Z0-9_-]", "", str(body.get("name","unknown")))[:80]
+                    candidate=str(body.get("message",""))
+                    candidate=re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+", "[email]", candidate)
+                    candidate=re.sub(r"re_[A-Za-z0-9_-]+", "[secret]", candidate)
+                    candidate=re.sub(r"[^A-Za-z0-9 .,;:_()\-/]", " ", candidate)
+                    safe_message=candidate[:250]
+            except (ValueError,UnicodeError):
+                category="invalid_json"
+        print(f"RESEND_QA_RESULT=rejected HTTP={exc.code} category={category} detail={safe_message} one_message=true", flush=True)
         return 1
     except Exception:
         print("RESEND_QA_RESULT=connection_error one_message=false", flush=True)
