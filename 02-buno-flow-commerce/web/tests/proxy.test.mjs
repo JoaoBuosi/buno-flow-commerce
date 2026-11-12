@@ -97,3 +97,47 @@ test("rejects arbitrary paths, unapproved methods and oversized uploads",async()
     await handler(x.req,x.res);assert.equal(x.res.statusCode,413);
   });
 });
+
+
+test("forwarded client IP comes only from Vercel-managed header, never client spoofing", async()=>{
+  const {req,res}=setup({url:"/api/v1/auth/login",method:"POST",headers:{
+    "content-type":"application/json",
+    "x-buno-client-ip":"198.51.100.200",
+    "x-forwarded-for":"198.51.100.201",
+    "x-vercel-forwarded-for":"203.0.113.55"
+  },body:'{"email":"unknown@example.test","password":"not-real"}'});
+  const original=globalThis.fetch;
+  globalThis.fetch=async (_url,options)=>{
+    assert.equal(options.headers.get("X-Buno-Client-IP"),"203.0.113.55");
+    assert.equal(options.headers.get("x-forwarded-for"),null);
+    assert.equal(options.headers.get("X-Buno-Edge-Key"),"server-side-secret-value-2026-of-sufficient-length");
+    return new Response('{"message":"Autenticação necessária"}',{status:401});
+  };
+  try {
+    await withEnv({
+      COMMERCE_EDGE_SECRET:"server-side-secret-value-2026-of-sufficient-length",
+      COMMERCE_UPSTREAM_ORIGIN:"https://backend.example.test"
+    },()=>handler(req,res));
+    assert.equal(res.statusCode,401);
+  } finally {globalThis.fetch=original;}
+});
+
+test("invalid provider IP cannot be forwarded into rate limiter",async()=>{
+  const {req,res}=setup({url:"/api/v1/auth/login",method:"POST",headers:{
+    "content-type":"application/json",
+    "x-vercel-forwarded-for":"203.0.113.1, 198.51.100.1",
+    "x-buno-client-ip":"203.0.113.200"
+  },body:'{"email":"unknown@example.test","password":"not-real"}'});
+  const original=globalThis.fetch;
+  globalThis.fetch=async (_url,options)=>{
+    assert.equal(options.headers.get("X-Buno-Client-IP"),null);
+    return new Response('{}',{status:401});
+  };
+  try {
+    await withEnv({
+      COMMERCE_EDGE_SECRET:"server-side-secret-value-2026-of-sufficient-length",
+      COMMERCE_UPSTREAM_ORIGIN:"https://backend.example.test"
+    },()=>handler(req,res));
+    assert.equal(res.statusCode,401);
+  } finally {globalThis.fetch=original;}
+});
