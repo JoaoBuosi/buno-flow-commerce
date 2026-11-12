@@ -216,14 +216,14 @@ public class OwnerMfaService {
     return result.toString();
   }
 
-  private byte[] encrypt(UUID uid, byte[] raw) {
+  private String encrypt(UUID uid, byte[] raw) {
     try {
       byte[] nonce=new byte[12];random.nextBytes(nonce);
       Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(Cipher.ENCRYPT_MODE,encryptionKey,new GCMParameterSpec(128,nonce));
       cipher.updateAAD(uid.toString().getBytes(StandardCharsets.UTF_8));
       byte[] result=cipher.doFinal(raw);
-      return encoded(nonce,result).getBytes(StandardCharsets.US_ASCII);
+      return encoded(nonce,result);
     } catch(Exception e) {throw new IllegalStateException("MFA encryption failed",e);}
   }
   private String encoded(byte[] nonce,byte[] data) {
