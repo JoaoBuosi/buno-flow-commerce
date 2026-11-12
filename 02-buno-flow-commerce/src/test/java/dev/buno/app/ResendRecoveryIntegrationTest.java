@@ -57,6 +57,36 @@ class ResendRecoveryIntegrationTest {
     assertTrue(message.getValue().getText().contains("https://flowcommerce.example.test/?reset_token="));
   }
 
+  @Test void duplicateResetInsideCooldownReturnsAcceptedButSendsOnlyOnce() throws Exception {
+    String email="resend-throttled-"+UUID.randomUUID()+"@example.test";
+    mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+      .content(json.writeValueAsString(Map.of(
+        "email",email,"password","initial-safe-password-2026",
+        "storeName","Loja QA Rate Limit"))))
+      .andExpect(status().isOk());
+
+    String request=json.writeValueAsString(Map.of("email",email));
+    for(int attempt=0;attempt<3;attempt++) {
+      mvc.perform(post("/api/v1/auth/reset/request")
+        .contentType(MediaType.APPLICATION_JSON).content(request))
+        .andExpect(status().isAccepted());
+    }
+    // Same generic HTTP response, but no duplicate provider call or token rotation.
+    verify(resend,times(1)).send(any(SimpleMailMessage.class));
+    Integer rows=db.queryForObject("""
+      SELECT count(*) FROM password_resets p JOIN users u ON u.id=p.user_id
+      WHERE u.email=?
+      """,Integer.class,email);
+    assertEquals(1,rows,"Account must retain a single valid recovery link");
+
+    String absent="missing-"+UUID.randomUUID()+"@example.test";
+    mvc.perform(post("/api/v1/auth/reset/request")
+      .contentType(MediaType.APPLICATION_JSON)
+      .content(json.writeValueAsString(Map.of("email",absent))))
+      .andExpect(status().isAccepted());
+    verify(resend,times(1)).send(any(SimpleMailMessage.class));
+  }
+
   @Test void providerFailureRollsBackResetAndReturnsGenericAccepted() throws Exception {
     String email="resend-failure-"+UUID.randomUUID()+"@example.test";
     mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
