@@ -1,0 +1,146 @@
+name: Flow Commerce - OWASP ZAP DAST (isolated baseline)
+on:
+  push:
+    branches: [feat/flow-commerce-0.5.7-zap-dast]
+    paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-zap-dast.yml']
+  pull_request:
+    paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-zap-dast.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: flow-commerce-zap-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  zap-baseline:
+    name: Passive scan - local React + Spring Boot + PostgreSQL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: commerce_zap_ci
+          POSTGRES_USER: flow_zap_ci
+          POSTGRES_PASSWORD: local-zap-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U flow_zap_ci -d commerce_zap_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      CI: 'true'
+      SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/commerce_zap_ci?currentSchema=flow_commerce
+      SPRING_DATASOURCE_USERNAME: flow_zap_ci
+      SPRING_DATASOURCE_PASSWORD: local-zap-only
+      COMMERCE_OWNER_MFA_REQUIRED: 'false'
+      COMMERCE_OWNER_MFA_SELF_ENROLLMENT_ENABLED: 'false'
+      COMMERCE_OWNER_MFA_PILOT_EMAIL: ''
+      COMMERCE_IP_RATE_LIMIT_ENABLED: 'false'
+      COMMERCE_EDGE_REQUIRED: 'false'
+      COMMERCE_MAIL_ENABLED: 'false'
+      COMMERCE_PILOT_ONLY: 'false'
+      VITE_API_URL: same-origin
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: 02-buno-flow-commerce/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: 02-buno-flow-commerce/web/package-lock.json
+      - name: Verify report gate tests
+        working-directory: 02-buno-flow-commerce
+        run: python3 -m unittest discover -s scripts -p 'test_zap_report_gate.py' -v
+      - name: Compile real Spring Boot API (disposable Postgres only)
+        working-directory: 02-buno-flow-commerce
+        run: mvn -B -DskipTests package
+      - name: Start isolated API
+        shell: bash
+        working-directory: 02-buno-flow-commerce
+        run: |
+          set -euo pipefail
+          nohup java -jar target/buno-flow-commerce-0.2.0-SNAPSHOT.jar > "$RUNNER_TEMP/flow-zap-api.log" 2>&1 &
+          for i in $(seq 1 70); do
+            if curl --noproxy '*' -fsS --max-time 3 http://127.0.0.1:8080/actuator/health | grep -q UP; then
+              echo 'Local Spring/PostgreSQL ready'
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::Local API failed to start'
+          exit 1
+      - name: Build frontend from lockfile
+        working-directory: 02-buno-flow-commerce/web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Start local read-only app with Vercel security headers
+        working-directory: 02-buno-flow-commerce/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup node scripts/ci-zap-server.mjs > "$RUNNER_TEMP/flow-zap-web.log" 2>&1 &
+          for i in $(seq 1 40); do
+            if curl --noproxy '*' -fsS --max-time 2 http://127.0.0.1:5173/ | grep -q 'Flow Commerce'; then break; fi
+            sleep 2
+          done
+          curl --noproxy '*' -fsS http://127.0.0.1:5173/ >/dev/null
+          curl --noproxy '*' -fsS http://127.0.0.1:5173/actuator/health | grep -q UP
+          curl --noproxy '*' -fsS http://127.0.0.1:5173/__ci__/api-index | grep -q 'Flow Commerce'
+          for path in /api/v1/me /api/v1/orders /api/v1/auth/mfa/status; do
+            test "$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:5173$path")" = 401
+          done
+          headers=$(curl --noproxy '*' -fsSI http://127.0.0.1:5173/)
+          grep -qi '^x-frame-options: DENY' <<<"$headers"
+          grep -qi '^content-security-policy:' <<<"$headers"
+          grep -qi '^referrer-policy: no-referrer' <<<"$headers"
+          echo 'Local target, security headers and anonymous API denials verified'
+      - name: Pull official ZAP image
+        run: docker pull ghcr.io/zaproxy/zaproxy:stable
+      - name: ZAP passive baseline - app plus protected GET API discovery
+        working-directory: 02-buno-flow-commerce
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p zap-artifacts
+          chmod 0777 zap-artifacts
+          for target in ui api; do
+            if [[ "$target" == ui ]]; then
+              url='http://127.0.0.1:5173/'
+            else
+              url='http://127.0.0.1:5173/__ci__/api-index'
+            fi
+            echo "ZAP baseline $target (isolated localhost)"
+            set +e
+            docker run --rm --network host --memory=4g -e JAVA_OPTS=-Xmx2048m \
+              -v "$PWD/zap-artifacts:/zap/wrk/:rw" \
+              ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+              -t "$url" -m 1 -T 8 -I -s \
+              -J "$target.json" -r "$target.html"
+            code=$?
+            set -e
+            if [[ "$code" != 0 && "$code" != 2 ]]; then
+              echo "::error::ZAP failed for $target (exit $code)"
+              exit "$code"
+            fi
+          done
+      - name: Summarize and enforce high-severity gate
+        working-directory: 02-buno-flow-commerce
+        run: python3 scripts/zap_report_gate.py zap-artifacts/ui.json zap-artifacts/api.json
+      - name: Upload ZAP HTML + JSON evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-commerce-zap-dast-${{ github.run_id }}
+          path: 02-buno-flow-commerce/zap-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
