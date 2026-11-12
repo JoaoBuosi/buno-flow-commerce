@@ -40,12 +40,14 @@ public class OwnerMfaService {
   private final SecureRandom random = new SecureRandom();
   private final boolean required;
   private final String pilotEmail;
+  private final boolean selfEnrollmentEnabled;
   private final SecretKeySpec encryptionKey;
 
   public OwnerMfaService(JdbcTemplate db, Environment environment) {
     this.db = db;
     this.required = environment.getProperty("commerce.mfa.owner-required", Boolean.class, false);
     this.pilotEmail = environment.getProperty("commerce.mfa.pilot-email", "").strip().toLowerCase(Locale.ROOT);
+    this.selfEnrollmentEnabled = environment.getProperty("commerce.mfa.self-enrollment-enabled", Boolean.class, false);
     String configured = environment.getProperty("commerce.mfa.encryption-key", "");
     byte[] key;
     try {
@@ -82,6 +84,7 @@ public class OwnerMfaService {
     String email=db.queryForObject("SELECT email FROM users WHERE id=?",String.class,userId);
     return requiredFor(email);
   }
+  public boolean selfEnrollmentEnabled() { return selfEnrollmentEnabled; }
   public boolean isEnrolled(UUID userId) {
     return Boolean.TRUE.equals(db.queryForObject(
       "SELECT EXISTS(SELECT 1 FROM owner_mfa WHERE user_id=? AND enabled_at IS NOT NULL)",
@@ -95,8 +98,8 @@ public class OwnerMfaService {
    */
   @Transactional
   public Challenge beginVoluntaryEnrollment(UUID userId, UUID storeId) {
-    if(encryptionKey==null)throw new ResponseStatusException(
-      HttpStatus.SERVICE_UNAVAILABLE,"Cadastro de 2FA indisponível");
+    if(!selfEnrollmentEnabled || encryptionKey==null)throw new ResponseStatusException(
+      HttpStatus.SERVICE_UNAVAILABLE,"Cadastro voluntário de 2FA ainda indisponível");
     db.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE",UUID.class,userId);
     if(isEnrolled(userId))throw new ResponseStatusException(
       HttpStatus.CONFLICT,"2FA já está ativado");
