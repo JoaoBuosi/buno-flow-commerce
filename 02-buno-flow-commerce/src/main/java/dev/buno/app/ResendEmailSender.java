@@ -47,6 +47,8 @@ public class ResendEmailSender {
       var request=HttpRequest.newBuilder(ENDPOINT)
         .timeout(Duration.ofSeconds(12))
         .header("Content-Type","application/json")
+        .header("Accept","application/json")
+        .header("User-Agent","BunoFlowCommerce/0.5.3")
         .header("Authorization","Bearer "+apiKey)
         .POST(HttpRequest.BodyPublishers.ofString(body,StandardCharsets.UTF_8))
         .build();
