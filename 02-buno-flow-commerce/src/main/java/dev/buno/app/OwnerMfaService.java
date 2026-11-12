@@ -64,11 +64,45 @@ public class OwnerMfaService {
   /** Exact user email allowlist while global enforcement is disabled; never a prefix/domain wildcard. */
   public boolean requiredFor(String email) {
     if(required) return true;
-    return !pilotEmail.isBlank() && email!=null && pilotEmail.equals(email.strip().toLowerCase(Locale.ROOT));
+    if(email==null)return false;
+    String normalized=email.strip().toLowerCase(Locale.ROOT);
+    if(!pilotEmail.isBlank() && pilotEmail.equals(normalized))return true;
+    // An enrolled OWNER must remain protected even before global enforcement is enabled.
+    return Boolean.TRUE.equals(db.queryForObject("""
+      SELECT EXISTS(SELECT 1 FROM owner_mfa f JOIN users u ON u.id=f.user_id
+      WHERE u.email=? AND f.enabled_at IS NOT NULL)
+      """,Boolean.class,normalized));
   }
   public boolean requiredFor(UUID userId) {
+    if(required)return true;
+    if(Boolean.TRUE.equals(db.queryForObject(
+      "SELECT EXISTS(SELECT 1 FROM owner_mfa WHERE user_id=? AND enabled_at IS NOT NULL)",
+      Boolean.class,userId)))return true;
+    if(pilotEmail.isBlank())return false;
     String email=db.queryForObject("SELECT email FROM users WHERE id=?",String.class,userId);
     return requiredFor(email);
+  }
+  public boolean isEnrolled(UUID userId) {
+    return Boolean.TRUE.equals(db.queryForObject(
+      "SELECT EXISTS(SELECT 1 FROM owner_mfa WHERE user_id=? AND enabled_at IS NOT NULL)",
+      Boolean.class,userId));
+  }
+
+  /**
+   * Enrollment from an existing OWNER session. The caller already rechecked the password.
+   * Before TOTP confirmation, the current session continues to work; after confirmation
+   * all older sessions are revoked and the account requires MFA regardless of global flag.
+   */
+  @Transactional
+  public Challenge beginVoluntaryEnrollment(UUID userId, UUID storeId) {
+    if(encryptionKey==null)throw new ResponseStatusException(
+      HttpStatus.SERVICE_UNAVAILABLE,"Cadastro de 2FA indisponível");
+    db.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE",UUID.class,userId);
+    if(isEnrolled(userId))throw new ResponseStatusException(
+      HttpStatus.CONFLICT,"2FA já está ativado");
+    db.update("DELETE FROM owner_mfa_challenges WHERE user_id=?",userId);
+    db.update("DELETE FROM owner_mfa WHERE user_id=? AND enabled_at IS NULL",userId);
+    return issueChallenge(userId,storeId,false);
   }
 
   @Transactional
@@ -77,6 +111,10 @@ public class OwnerMfaService {
     boolean enrolled = Boolean.TRUE.equals(db.queryForObject(
       "SELECT EXISTS(SELECT 1 FROM owner_mfa WHERE user_id=? AND enabled_at IS NOT NULL)",
       Boolean.class, userId));
+    return issueChallenge(userId,storeId,enrolled);
+  }
+
+  private Challenge issueChallenge(UUID userId,UUID storeId,boolean enrolled) {
     // New challenges revoke previous outstanding login/enrollment tokens.
     db.update("DELETE FROM owner_mfa_challenges WHERE user_id=?", userId);
     byte[] raw = new byte[32];
@@ -92,9 +130,9 @@ public class OwnerMfaService {
 
   @Transactional
   public Enrollment startEnrollment(String token) {
-    if(!required && pilotEmail.isBlank())throw unauthorized();
+    // Only an unexpired, password-authorized ENROLL challenge grants access here:
+    // it comes from a password-verified login or reauthenticated OWNER session.
     Pending pending = find(token,"ENROLL");
-    if(pending!=null && !requiredFor(pending.userId()))throw unauthorized();
     if (pending == null) throw unauthorized();
     var rows = db.queryForList(
       "SELECT secret_ciphertext,enabled_at FROM owner_mfa WHERE user_id=? FOR UPDATE",
@@ -123,9 +161,7 @@ public class OwnerMfaService {
   /** Failure returns null to commit failed-attempt counters before the controller sends 401. */
   @Transactional
   public Verification finishEnrollment(String token, String code) {
-    if(!required && pilotEmail.isBlank())return null;
     Pending pending = find(token,"ENROLL");
-    if(pending!=null && !requiredFor(pending.userId()))return null;
     if (pending == null) return null;
     db.update("UPDATE owner_mfa_challenges SET attempts=attempts+1 WHERE token_hash=?",sha(token));
     var rows = db.queryForList(
@@ -154,7 +190,6 @@ public class OwnerMfaService {
   /** Return null on incorrect MFA to persist attempt counts; never reveal which factor failed. */
   @Transactional
   public Verification verify(String token, String code, String recoveryCode) {
-    if(!required && pilotEmail.isBlank())return null;
     Pending pending=find(token,"LOGIN");
     if(pending!=null && !requiredFor(pending.userId()))return null;
     if (pending==null) return null;
