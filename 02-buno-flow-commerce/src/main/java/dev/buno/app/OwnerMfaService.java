@@ -39,11 +39,13 @@ public class OwnerMfaService {
   private final JdbcTemplate db;
   private final SecureRandom random = new SecureRandom();
   private final boolean required;
+  private final String pilotEmail;
   private final SecretKeySpec encryptionKey;
 
   public OwnerMfaService(JdbcTemplate db, Environment environment) {
     this.db = db;
     this.required = environment.getProperty("commerce.mfa.owner-required", Boolean.class, false);
+    this.pilotEmail = environment.getProperty("commerce.mfa.pilot-email", "").strip().toLowerCase(Locale.ROOT);
     String configured = environment.getProperty("commerce.mfa.encryption-key", "");
     byte[] key;
     try {
@@ -51,7 +53,7 @@ public class OwnerMfaService {
     } catch (IllegalArgumentException ex) {
       throw new IllegalStateException("Invalid OWNER MFA key encoding");
     }
-    if (required && key.length != 32) {
+    if ((required || !pilotEmail.isBlank()) && key.length != 32) {
       throw new IllegalStateException("OWNER MFA requires a private, 32-byte AES key (Base64)");
     }
     this.encryptionKey = key.length == 32 ? new SecretKeySpec(key, "AES") : null;
@@ -59,9 +61,19 @@ public class OwnerMfaService {
 
   public boolean required() { return required; }
 
+  /** Exact user email allowlist while global enforcement is disabled; never a prefix/domain wildcard. */
+  public boolean requiredFor(String email) {
+    if(required) return true;
+    return !pilotEmail.isBlank() && email!=null && pilotEmail.equals(email.strip().toLowerCase(Locale.ROOT));
+  }
+  public boolean requiredFor(UUID userId) {
+    String email=db.queryForObject("SELECT email FROM users WHERE id=?",String.class,userId);
+    return requiredFor(email);
+  }
+
   @Transactional
   public Challenge challenge(UUID userId, UUID storeId) {
-    if (!required) throw new IllegalStateException("OWNER MFA not enabled");
+    if (!requiredFor(userId)) throw new IllegalStateException("OWNER MFA not enabled for this account");
     boolean enrolled = Boolean.TRUE.equals(db.queryForObject(
       "SELECT EXISTS(SELECT 1 FROM owner_mfa WHERE user_id=? AND enabled_at IS NOT NULL)",
       Boolean.class, userId));
@@ -80,8 +92,9 @@ public class OwnerMfaService {
 
   @Transactional
   public Enrollment startEnrollment(String token) {
-    if(!required)throw unauthorized();
+    if(!required && pilotEmail.isBlank())throw unauthorized();
     Pending pending = find(token,"ENROLL");
+    if(pending!=null && !requiredFor(pending.userId()))throw unauthorized();
     if (pending == null) throw unauthorized();
     var rows = db.queryForList(
       "SELECT secret_ciphertext,enabled_at FROM owner_mfa WHERE user_id=? FOR UPDATE",
@@ -110,8 +123,9 @@ public class OwnerMfaService {
   /** Failure returns null to commit failed-attempt counters before the controller sends 401. */
   @Transactional
   public Verification finishEnrollment(String token, String code) {
-    if(!required)return null;
+    if(!required && pilotEmail.isBlank())return null;
     Pending pending = find(token,"ENROLL");
+    if(pending!=null && !requiredFor(pending.userId()))return null;
     if (pending == null) return null;
     db.update("UPDATE owner_mfa_challenges SET attempts=attempts+1 WHERE token_hash=?",sha(token));
     var rows = db.queryForList(
@@ -140,8 +154,9 @@ public class OwnerMfaService {
   /** Return null on incorrect MFA to persist attempt counts; never reveal which factor failed. */
   @Transactional
   public Verification verify(String token, String code, String recoveryCode) {
-    if(!required)return null;
+    if(!required && pilotEmail.isBlank())return null;
     Pending pending=find(token,"LOGIN");
+    if(pending!=null && !requiredFor(pending.userId()))return null;
     if (pending==null) return null;
     db.update("UPDATE owner_mfa_challenges SET attempts=attempts+1 WHERE token_hash=?",sha(token));
     var rows=db.queryForList(
