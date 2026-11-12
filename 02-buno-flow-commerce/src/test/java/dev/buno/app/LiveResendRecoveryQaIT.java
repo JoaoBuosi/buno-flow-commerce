@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
   "commerce.mail.enabled=true",
   "commerce.mail.provider=resend",
   "commerce.mail.from=onboarding@resend.dev",
-  "commerce.mail.frontend-url=https://buno-flow-commerce-staging-web.vercel.app",
+  "commerce.mail.frontend-url=https://flow-commerce-qa.invalid",
   "commerce.pilot-only=false",
   "commerce.pilot-invite-code="
 })
@@ -117,6 +117,7 @@ class LiveResendRecoveryQaIT {
     assertEquals(200,oldSessionBeforeReset.getResponse().getStatus(),
       "Invalid token must not revoke active sessions");
 
+    Thread.sleep(1200); // avoid provider rate-limit during consecutive real sends
     api("/auth/reset/request",Map.of("email",email),202);
     messages=org.mockito.ArgumentCaptor.forClass(SimpleMailMessage.class);
     verify(resend,times(2)).send(messages.capture());
