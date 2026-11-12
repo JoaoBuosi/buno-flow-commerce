@@ -18,7 +18,7 @@ test("OWNER: login exige código antes de mostrar o painel", async ({ page }) =>
     })});
   });
   await page.route("**/api/v1/**",async route=>{
-    if(route.request().url().includes("/auth/"))return route.continue();
+    if(route.request().url().includes("/auth/"))return route.fallback();
     await route.fulfill({status:200,contentType:"application/json",body:"{}"});
   });
   await page.goto("/");
@@ -58,7 +58,7 @@ test("OWNER: cadastro exige ativação TOTP e exibe códigos uma única vez",asy
     })});
   });
   await page.route("**/api/v1/**",async route=>{
-    if(route.request().url().includes("/auth/"))return route.continue();
+    if(route.request().url().includes("/auth/"))return route.fallback();
     await route.fulfill({status:200,contentType:"application/json",body:"{}"});
   });
   await page.goto("/");
