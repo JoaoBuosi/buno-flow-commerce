@@ -78,6 +78,9 @@ test("OWNER: cadastro exige ativação TOTP e exibe códigos uma única vez",asy
   await page.getByRole("button",{name:"Validar e entrar"}).click();
   await expect(page.getByRole("heading",{name:"Códigos de recuperação"})).toBeVisible();
   await expect(page.getByText("f".repeat(20))).toBeVisible();
-  await page.getByRole("button",{name:"Já salvei os códigos; continuar"}).click();
+  const continueButton=page.getByRole("button",{name:"Já salvei os códigos; continuar"});
+  await expect(continueButton).toBeDisabled();
+  await page.getByLabel(/Confirmo que salvei meus oito códigos/).check();
+  await continueButton.click();
   await expect(page.getByRole("heading",{name:"Códigos de recuperação"})).toHaveCount(0);
 });
