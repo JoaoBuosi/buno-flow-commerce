@@ -33,6 +33,8 @@ class AuthIpRateLimitIntegrationTest {
   }
 
   @Test void blocksAfterThirtyAttemptsEvenWhenClientForgesForwardedHeaders() throws Exception {
+    // CI shares an ephemeral PostgreSQL across test classes; isolate this bucket.
+    db.update("DELETE FROM flow_commerce.auth_ip_rate_limits WHERE route_family=?", "login");
     String remote="198.51.100."+((UUID.randomUUID().hashCode()&0x7f)+1);
     for(int i=0;i<30;i++) {
       mvc.perform(login(remote,"203.0.113."+((i%50)+1)))
