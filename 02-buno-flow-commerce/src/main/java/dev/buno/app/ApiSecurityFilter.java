@@ -58,7 +58,7 @@ public final class ApiSecurityFilter extends OncePerRequestFilter {
       }
     }
 
-    if (!distributedLimiterEnabled && "POST".equals(method) && (path.equals("/api/v1/auth/login") || path.equals("/api/v1/auth/register") || path.equals("/api/v1/auth/reset/request") || path.equals("/api/v1/auth/mfa/enroll/start") || path.equals("/api/v1/auth/mfa/enroll/complete") || path.equals("/api/v1/auth/mfa/login/verify"))) {
+    if (!distributedLimiterEnabled && "POST".equals(method) && (path.equals("/api/v1/auth/login") || path.equals("/api/v1/auth/register") || path.equals("/api/v1/auth/reset/request") || path.equals("/api/v1/auth/mfa/enroll/start") || path.equals("/api/v1/auth/mfa/enroll/complete") || path.equals("/api/v1/auth/mfa/login/verify") || path.equals("/api/v1/auth/mfa/self/enroll"))) {
       // Use socket address only; untrusted X-Forwarded-For cannot bypass the limiter.
       String key=req.getRemoteAddr();
       long now=System.currentTimeMillis();
