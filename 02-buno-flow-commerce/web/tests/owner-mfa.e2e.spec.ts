@@ -19,7 +19,9 @@ test("OWNER: login exige código antes de mostrar o painel", async ({ page }) =>
   });
   await page.route("**/api/v1/**",async route=>{
     if(route.request().url().includes("/auth/"))return route.fallback();
-    await route.fulfill({status:200,contentType:"application/json",body:"{}"});
+    const url=route.request().url();
+    const response=url.includes("/orders/count")?{total:0}:url.includes("/dashboard")?{order_count:0,active_count:0,delivered_count:0,canceled_count:0,order_value:0}:url.includes("/orders")?[]:{};
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(response)});
   });
   await page.goto("/");
   await page.getByLabel("E-mail",{exact:true}).fill("owner@example.test");
@@ -59,7 +61,9 @@ test("OWNER: cadastro exige ativação TOTP e exibe códigos uma única vez",asy
   });
   await page.route("**/api/v1/**",async route=>{
     if(route.request().url().includes("/auth/"))return route.fallback();
-    await route.fulfill({status:200,contentType:"application/json",body:"{}"});
+    const url=route.request().url();
+    const response=url.includes("/orders/count")?{total:0}:url.includes("/dashboard")?{order_count:0,active_count:0,delivered_count:0,canceled_count:0,order_value:0}:url.includes("/orders")?[]:{};
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(response)});
   });
   await page.goto("/");
   await page.getByRole("button",{name:"Criar conta e loja"}).click();
