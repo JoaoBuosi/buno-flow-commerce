@@ -30,6 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class OwnerMfaIntegrationTest {
+  private static final java.util.concurrent.atomic.AtomicInteger MOCK_SOCKET=new java.util.concurrent.atomic.AtomicInteger();
   @Autowired MockMvc mvc;
   @Autowired JdbcTemplate db;
   @Autowired ObjectMapper json;
@@ -37,6 +38,7 @@ class OwnerMfaIntegrationTest {
 
   private JsonNode postApi(String path,Map<String,?> body,int status) throws Exception {
     var response=mvc.perform(post("/api/v1"+path)
+      .with(req->{req.setRemoteAddr("192.0.2."+((MOCK_SOCKET.incrementAndGet()%240)+10));return req;})
       .contentType(MediaType.APPLICATION_JSON)
       .content(json.writeValueAsString(body)))
       .andExpect(status().is(status)).andReturn();
