@@ -61,7 +61,9 @@ def main():
                     safe_message=candidate[:250]
             except (ValueError,UnicodeError):
                 category="invalid_json"
-        print(f"RESEND_QA_RESULT=rejected HTTP={exc.code} category={category} detail={safe_message} one_message=true", flush=True)
+        header_type=re.sub(r"[^A-Za-z0-9/+._;-]", "", content_type)[:50]
+        server=re.sub(r"[^A-Za-z0-9._/-]", "", exc.headers.get("Server","") if exc.headers else "")[:50]
+        print(f"RESEND_QA_RESULT=rejected HTTP={exc.code} content_type={header_type} server={server} category={category} detail={safe_message} one_message=true", flush=True)
         return 1
     except Exception:
         print("RESEND_QA_RESULT=connection_error one_message=false", flush=True)
