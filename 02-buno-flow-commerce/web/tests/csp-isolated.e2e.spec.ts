@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/test";
 // Run only against the compiled app served with its production CSP in the
 // disposable GitHub Actions environment. Never targets staging or production.
 test("strict production CSP preserves login/registration UI without inline styles", async ({page}) => {
+  test.skip(!process.env.EXTERNAL_FRONTEND_URL, "Only compiled CI site serves enforced production CSP");
   const violations: string[] = [];
   const pageErrors: string[] = [];
   await page.addInitScript(() => {
