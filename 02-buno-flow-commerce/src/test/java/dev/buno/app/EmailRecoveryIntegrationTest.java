@@ -27,6 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest(properties={
   "commerce.mail.enabled=true",
+  "commerce.mail.cooldown-seconds=0", // Keep token-rotation coverage independent of cooldown policy
   "commerce.mail.from=contas@flowcommerce.example.test",
   "commerce.mail.frontend-url=https://flowcommerce.example.test"
 })
