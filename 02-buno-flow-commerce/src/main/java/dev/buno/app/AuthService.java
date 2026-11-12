@@ -41,7 +41,7 @@ public class AuthService {
     db.update("INSERT INTO users(id,email,password_hash) VALUES(?,?,?)", userId,email,passwords.encode(password));
     db.update("INSERT INTO stores(id,name) VALUES(?,?)", storeId,storeName.trim());
     db.update("INSERT INTO memberships(store_id,user_id,role) VALUES(?,?,'OWNER')",storeId,userId);
-    return mfa.required() ? mfa.challenge(userId,storeId) : issue(userId,storeId,"OWNER",false);
+    return mfa.requiredFor(email) ? mfa.challenge(userId,storeId) : issue(userId,storeId,"OWNER",false);
   }
   @Transactional
   public Object login(String email, String password) {
@@ -53,7 +53,7 @@ public class AuthService {
     if(memberships.isEmpty()) throw unauth();
     UUID storeId=(UUID)memberships.get(0).get("store_id");
     String role=(String)memberships.get(0).get("role");
-    if(mfa.required() && "OWNER".equals(role)) return mfa.challenge(uid,storeId);
+    if(mfa.requiredFor(uid) && "OWNER".equals(role)) return mfa.challenge(uid,storeId);
     return issue(uid,storeId,role,false);
   }
   private Token issue(UUID uid,UUID storeId,String role,boolean verifiedMfa) {
@@ -75,7 +75,7 @@ public class AuthService {
       hash(token),store);
     if(matches.size()!=1) throw unauth();
     Map<String,Object> m=matches.get(0);
-    if(mfa.required() && "OWNER".equals(m.get("role")) &&
+    if(mfa.requiredFor((String)m.get("email")) && "OWNER".equals(m.get("role")) &&
        !Boolean.TRUE.equals(m.get("mfa_verified")))throw unauth();
     return new Session((UUID)m.get("user_id"),store,(String)m.get("email"),(String)m.get("role"));
   }
@@ -91,7 +91,7 @@ public class AuthService {
     db.update("DELETE FROM owner_mfa_challenges WHERE user_id=?",caller.userId());
     // Caller passed require() and therefore has a verified OWNER session if MFA is active.
     return issue(caller.userId(),caller.storeId(),caller.role(),
-      mfa.required() && "OWNER".equals(caller.role()));
+      mfa.requiredFor(caller.userId()) && "OWNER".equals(caller.role()));
   }
   public OwnerMfaService.Enrollment startMfaEnrollment(String challengeToken) {
     return mfa.startEnrollment(challengeToken);
