@@ -1,0 +1,41 @@
+name: Flow Commerce - create reproducible npm lockfile (one shot)
+on:
+  push:
+    branches: [feat/flow-commerce-0.5.3-operational-readiness]
+    paths: ['.github/workflows/flow-commerce-lockfile.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  generate:
+    if: github.ref == 'refs/heads/feat/flow-commerce-0.5.3-operational-readiness'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate deterministic lockfile without executing dependency scripts
+        working-directory: 02-buno-flow-commerce/web
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify install and build with lockfile
+        working-directory: 02-buno-flow-commerce/web
+        run: |
+          npm ci --ignore-scripts --no-fund
+          npm audit --audit-level=high
+          npm run build
+      - name: Commit lockfile to audited feature branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 02-buno-flow-commerce/web/package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Lockfile already committed'
+            exit 0
+          fi
+          git commit -m 'build(web): commit npm package lockfile for reproducible builds'
+          git push origin HEAD:feat/flow-commerce-0.5.3-operational-readiness
