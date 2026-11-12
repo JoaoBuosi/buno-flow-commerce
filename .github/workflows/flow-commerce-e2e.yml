@@ -67,7 +67,7 @@ jobs:
           exit 1
       - name: Install frontend dependencies
         working-directory: 02-buno-flow-commerce/web
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Verify preinstalled Google Chrome on stable Ubuntu runner
         run: google-chrome --version
       - name: Test full merchant browser journeys and tenant separation
