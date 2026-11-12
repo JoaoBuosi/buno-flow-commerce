@@ -38,6 +38,13 @@ class ZapReportGateTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unapproved"):
                 check_report(path)
 
+    def test_authenticated_port_requires_explicit_scope(self):
+        with TemporaryDirectory() as temp:
+            path = self.report(temp, port="8080")
+            with self.assertRaisesRegex(ValueError, "unapproved"):
+                check_report(path)
+            self.assertEqual(1, check_report(path, expected_port="8080")["sites"])
+
     def test_unknown_risk_blocks(self):
         with TemporaryDirectory() as temp:
             path = self.report(temp, risk="critical-unparsed")
