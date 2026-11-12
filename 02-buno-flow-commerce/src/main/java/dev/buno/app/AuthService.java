@@ -93,10 +93,10 @@ public class AuthService {
     return issue(caller.userId(),caller.storeId(),caller.role(),
       mfa.requiredFor(caller.userId()) && "OWNER".equals(caller.role()));
   }
-  public record MfaStatus(boolean enrolled, boolean required) {}
+  public record MfaStatus(boolean enrolled, boolean required, boolean enrollmentAvailable) {}
   public MfaStatus mfaStatus(Session caller) {
     if(!"OWNER".equals(caller.role()))throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-    return new MfaStatus(mfa.isEnrolled(caller.userId()),mfa.requiredFor(caller.userId()));
+    return new MfaStatus(mfa.isEnrolled(caller.userId()),mfa.requiredFor(caller.userId()),mfa.selfEnrollmentEnabled());
   }
   @Transactional
   public OwnerMfaService.Challenge beginVoluntaryMfa(Session caller,String currentPassword) {
