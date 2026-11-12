@@ -93,6 +93,20 @@ public class AuthService {
     return issue(caller.userId(),caller.storeId(),caller.role(),
       mfa.requiredFor(caller.userId()) && "OWNER".equals(caller.role()));
   }
+  public record MfaStatus(boolean enrolled, boolean required) {}
+  public MfaStatus mfaStatus(Session caller) {
+    if(!"OWNER".equals(caller.role()))throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    return new MfaStatus(mfa.isEnrolled(caller.userId()),mfa.requiredFor(caller.userId()));
+  }
+  @Transactional
+  public OwnerMfaService.Challenge beginVoluntaryMfa(Session caller,String currentPassword) {
+    if(!"OWNER".equals(caller.role()))throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    if(currentPassword==null || currentPassword.isBlank())throw unauth();
+    String saved=db.queryForObject(
+      "SELECT password_hash FROM users WHERE id=? FOR UPDATE",String.class,caller.userId());
+    if(saved==null || !passwords.matches(currentPassword,saved))throw unauth();
+    return mfa.beginVoluntaryEnrollment(caller.userId(),caller.storeId());
+  }
   public OwnerMfaService.Enrollment startMfaEnrollment(String challengeToken) {
     return mfa.startEnrollment(challengeToken);
   }
