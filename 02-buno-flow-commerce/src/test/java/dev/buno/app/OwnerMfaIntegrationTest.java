@@ -66,7 +66,7 @@ class OwnerMfaIntegrationTest {
     assertEquals(20,offset);
     return decoded;
   }
-  private record Enrolled(String email,String storeId,String accessToken,String recoveryCode) {}
+  private record Enrolled(String email,String storeId,String accessToken,String recoveryCode,String enrollmentOtp) {}
   private Enrolled enroll(String email,String initialChallenge,String store) throws Exception {
     JsonNode setup=postApi("/auth/mfa/enroll/start",
       Map.of("challengeToken",initialChallenge),200);
@@ -87,7 +87,7 @@ class OwnerMfaIntegrationTest {
     assertEquals(8,db.queryForObject(
       "SELECT count(*) FROM owner_mfa_recovery_codes WHERE user_id=?",Integer.class,uid));
     return new Enrolled(email,store,completed.get("accessToken").asText(),
-      completed.get("recoveryCodes").get(0).asText());
+      completed.get("recoveryCodes").get(0).asText(),otp);
   }
   @Test void ownerHasNoPrivilegeBeforeTotpAndOldUnverifiedSessionsAreDenied() throws Exception {
     String email="owner-mfa-"+UUID.randomUUID()+"@example.test";
@@ -133,6 +133,10 @@ class OwnerMfaIntegrationTest {
     assertTrue(login.get("mfaRequired").asBoolean());
     assertFalse(login.get("enrollmentRequired").asBoolean());
     assertFalse(login.has("accessToken"));
+    // The enrollment OTP was consumed: it may not authenticate again in the same time step.
+    postApi("/auth/mfa/login/verify",Map.of(
+      "challengeToken",login.get("challengeToken").asText(),
+      "code",enrolled.enrollmentOtp()),401);
 
     JsonNode success=postApi("/auth/mfa/login/verify",Map.of(
       "challengeToken",login.get("challengeToken").asText(),
