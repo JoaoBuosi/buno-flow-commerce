@@ -1,11 +1,6 @@
-FROM maven:3.9-eclipse-temurin-21 AS build
-WORKDIR /workspace
-COPY pom.xml .
-RUN mvn -q -DskipTests dependency:go-offline
-COPY src ./src
-RUN mvn -q -DskipTests package
-FROM eclipse-temurin:21-jre
+# Short-lived HTTP QA job. No database connection or public listener.
+FROM python:3.12-slim
 WORKDIR /app
-COPY --from=build /workspace/target/*.jar app.jar
-EXPOSE 8080
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+COPY scripts/qa_owner_mfa/verify_staging_pilot.py /app/verify.py
+USER 65534:65534
+CMD ["python","-u","/app/verify.py"]
