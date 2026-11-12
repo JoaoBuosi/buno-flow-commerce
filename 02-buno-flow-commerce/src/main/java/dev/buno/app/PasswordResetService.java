@@ -27,6 +27,7 @@ public class PasswordResetService {
   private final ResendEmailSender resend;
   private final String provider;
   private final boolean enabled;
+  private final int cooldownSeconds;
   private final String sender;
   private final String frontendUrl;
   private final SecureRandom random=new SecureRandom();
@@ -36,10 +37,12 @@ public class PasswordResetService {
       ResendEmailSender resend,
       @Value("${commerce.mail.provider:smtp}") String provider,
       @Value("${commerce.mail.enabled:false}") boolean enabled,
+      @Value("${commerce.mail.cooldown-seconds:300}") int cooldownSeconds,
       @Value("${commerce.mail.from:}") String sender,
       @Value("${commerce.mail.frontend-url:http://localhost:5173}") String frontendUrl){
     this.db=db;this.mail=mailSender.getIfAvailable();this.resend=resend;
     this.provider=provider;this.enabled=enabled;
+    this.cooldownSeconds=Math.max(0,cooldownSeconds);
     this.sender=sender;this.frontendUrl=frontendUrl;
   }
   public record ResetRequest(String email){}
@@ -57,6 +60,15 @@ public class PasswordResetService {
     // Do not disclose whether an account exists.
     if(results.isEmpty())return;
     UUID user=(UUID)results.get(0).get("id");
+    // Serialize concurrent reset attempts for one account, including across replicas.
+    db.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE",UUID.class,user);
+    // Return HTTP 202 without sending again; do not reveal whether a user exists.
+    if(cooldownSeconds>0 && Boolean.TRUE.equals(db.queryForObject("""
+        SELECT EXISTS (
+          SELECT 1 FROM password_resets
+          WHERE user_id=? AND created_at>now()-make_interval(secs => ?)
+        )
+        """,Boolean.class,user,cooldownSeconds)))return;
     db.update("DELETE FROM password_resets WHERE user_id=?",user);
     byte[] randomBytes=new byte[32];random.nextBytes(randomBytes);
     String token=HexFormat.of().formatHex(randomBytes);
