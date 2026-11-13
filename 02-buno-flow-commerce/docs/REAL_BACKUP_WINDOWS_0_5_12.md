@@ -26,19 +26,19 @@ O SQL abaixo é um modelo para revisão por responsável autorizado. Não o apli
 
 ~~~sql
 -- Conta sem senha até provisionamento seguro por administrador autorizado.
-CREATE ROLE flow_backup_export WITH LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+CREATE ROLE flow_backup_export WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 GRANT CONNECT ON DATABASE postgres TO flow_backup_export;
 GRANT USAGE ON SCHEMA flow_commerce TO flow_backup_export;
 GRANT SELECT ON ALL TABLES IN SCHEMA flow_commerce TO flow_backup_export;
 GRANT SELECT ON ALL SEQUENCES IN SCHEMA flow_commerce TO flow_backup_export;
 ~~~
 
-Use uma role existente, se houver uma aprovada e equivalente, em vez de criar outra. Não conceder INSERT/UPDATE/DELETE, superuser, BYPASSRLS, CREATE, USAGE/UPDATE em sequences (permitem avançar ou alterar sequência), acesso público ou permissões de outros schemas. Reavaliar grants após migrações; revogar credenciais temporárias ao final. O helper verifica privilégios reais e aborta antes de criar dump se houver escrita/administração, BYPASSRLS ou participação em outras roles. A criação da role **não** define sua senha nem habilita por si só o backup; o acesso exige configuração posterior em cofre aprovado e teste de conexão supervisionado.
+Use uma role existente, se houver uma aprovada e equivalente, em vez de criar outra. Não conceder INSERT/UPDATE/DELETE, superuser, BYPASSRLS, CREATE, USAGE/UPDATE em sequences (permitem avançar ou alterar sequência), acesso público ou permissões de outros schemas. Reavaliar grants após migrações; revogar credenciais temporárias ao final. O helper verifica privilégios reais e aborta antes de criar dump se houver escrita/administração, BYPASSRLS ou participação em outras roles. A role é proposta inicialmente com **NOLOGIN**: mesmo que seja criada, não poderá autenticar. Após o responsável registrar uma senha forte em cofre independente e verificar as permissões, a ativação de LOGIN e a configuração da senha exigem operação supervisionada e autorização específica; nunca informar a senha pelo chat ou por script versionado.
 
 ### Verificação da role após aprovação (somente metadados)
 
 A role exata `flow_backup_export` não existia na consulta de catálogo mais recente. Quando houver autorização para criá-la, o responsável deverá confirmar em consulta de leitura que:
-- `rolcanlogin=true`; `rolsuper=false`, `rolcreaterole=false`, `rolcreatedb=false`, `rolreplication=false`, `rolbypassrls=false`;
+- Durante o provisionamento inicial, `rolcanlogin=false`; somente após a etapa supervisionada de senha e ativação, confirmar `rolcanlogin=true`. Em ambas, `rolsuper=false`, `rolcreaterole=false`, `rolcreatedb=false`, `rolreplication=false`, `rolbypassrls=false`;
 - não há associações de role em `pg_auth_members`;
 - não existem privilégios de escrita em tabelas, colunas ou sequências; somente leitura de `flow_commerce`;
 - o acesso com credencial do cofre funciona por TLS e as consultas de leitura são permitidas, mas INSERT/UPDATE/DELETE/nextval não são.
