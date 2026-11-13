@@ -1,7 +1,7 @@
 name: Flow Commerce - OWASP ZAP DAST (isolated baseline)
 on:
   push:
-    branches: [feat/flow-commerce-0.5.7-zap-dast]
+    branches: [feat/flow-commerce-0.5.7-zap-dast, feat/flow-commerce-0.5.8-csp-auth-dast]
     paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-zap-dast.yml']
   pull_request:
     paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-zap-dast.yml']
@@ -34,7 +34,7 @@ jobs:
       SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/commerce_zap_ci?currentSchema=flow_commerce
       SPRING_DATASOURCE_USERNAME: flow_zap_ci
       SPRING_DATASOURCE_PASSWORD: local-zap-only
-      COMMERCE_OWNER_MFA_REQUIRED: 'false'
+      COMMERCE_OWNER_MFA_REQUIRED: 'true'
       COMMERCE_OWNER_MFA_SELF_ENROLLMENT_ENABLED: 'false'
       COMMERCE_OWNER_MFA_PILOT_EMAIL: ''
       COMMERCE_IP_RATE_LIMIT_ENABLED: 'false'
@@ -59,10 +59,22 @@ jobs:
           cache-dependency-path: 02-buno-flow-commerce/web/package-lock.json
       - name: Verify report gate tests
         working-directory: 02-buno-flow-commerce
-        run: python3 -m unittest discover -s scripts -p 'test_zap_report_gate.py' -v
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_zap_report_gate.py' -v
+          python3 -m unittest discover -s scripts -p 'test_csp_policy.py' -v
       - name: Compile real Spring Boot API (disposable Postgres only)
         working-directory: 02-buno-flow-commerce
         run: mvn -B -DskipTests package
+      - name: Generate disposable 32-byte MFA encryption key (never printed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import base64, secrets
+          print('COMMERCE_MFA_ENCRYPTION_KEY=' + base64.b64encode(secrets.token_bytes(32)).decode())
+          PY
+          echo "ZAP_AUTH_FIXTURE_PATH=$RUNNER_TEMP/zap-auth/auth-fixtures.json" >> "$GITHUB_ENV"
       - name: Start isolated API
         shell: bash
         working-directory: 02-buno-flow-commerce
@@ -78,6 +90,15 @@ jobs:
           done
           echo '::error::Local API failed to start'
           exit 1
+      - name: Authenticate two fake OWNER accounts and test real API tenancy/MFA
+        shell: bash
+        working-directory: 02-buno-flow-commerce
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/zap-auth"
+          chmod 700 "$RUNNER_TEMP/zap-auth"
+          python3 scripts/ci_authenticated_dast.py
       - name: Build frontend from lockfile
         working-directory: 02-buno-flow-commerce/web
         run: |
@@ -96,12 +117,18 @@ jobs:
           curl --noproxy '*' -fsS http://127.0.0.1:5173/ >/dev/null
           curl --noproxy '*' -fsS http://127.0.0.1:5173/actuator/health | grep -q UP
           curl --noproxy '*' -fsS http://127.0.0.1:5173/__ci__/api-index | grep -q 'Flow Commerce'
+          curl --noproxy '*' -fsS http://127.0.0.1:5173/__ci__/auth-index | grep -q 'Two isolated merchant sessions'
+          curl --noproxy '*' -fsS http://127.0.0.1:5173/__ci__/authenticated/owner-a/me | grep -q 'owner-a'
+          curl --noproxy '*' -fsS http://127.0.0.1:5173/__ci__/authenticated/owner-b/orders | grep -q 'customer_name'
+          test "$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:5173/__ci__/authenticated/owner-a/orders)" = 405
           for path in /api/v1/me /api/v1/orders /api/v1/auth/mfa/status; do
             test "$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:5173$path")" = 401
           done
           headers=$(curl --noproxy '*' -fsSI http://127.0.0.1:5173/)
           grep -qi '^x-frame-options: DENY' <<<"$headers"
           grep -qi '^content-security-policy:' <<<"$headers"
+          grep -qi "style-src 'self';" <<<"$headers"
+          if grep -qi "style-src.*unsafe-inline" <<<"$headers"; then echo '::error::Inline CSS allowed by CSP'; exit 1; fi
           grep -qi '^referrer-policy: no-referrer' <<<"$headers"
           echo 'Local target, security headers and anonymous API denials verified'
       - name: Pull official ZAP image
@@ -113,11 +140,13 @@ jobs:
           set -euo pipefail
           mkdir -p zap-artifacts
           chmod 0777 zap-artifacts
-          for target in ui api; do
+          for target in ui api auth; do
             if [[ "$target" == ui ]]; then
               url='http://127.0.0.1:5173/'
-            else
+            elif [[ "$target" == api ]]; then
               url='http://127.0.0.1:5173/__ci__/api-index'
+            else
+              url='http://127.0.0.1:5173/__ci__/auth-index'
             fi
             echo "ZAP baseline $target (isolated localhost)"
             set +e
@@ -135,7 +164,7 @@ jobs:
           done
       - name: Summarize and enforce high-severity gate
         working-directory: 02-buno-flow-commerce
-        run: python3 scripts/zap_report_gate.py zap-artifacts/ui.json zap-artifacts/api.json
+        run: python3 scripts/zap_report_gate.py zap-artifacts/ui.json zap-artifacts/api.json zap-artifacts/auth.json
       - name: Upload ZAP HTML + JSON evidence
         if: always()
         uses: actions/upload-artifact@v4

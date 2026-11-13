@@ -17,6 +17,31 @@ const publicDir = resolve(folder, "dist");
 const securityHeaders = JSON.parse(await readFile(join(folder, "vercel.json"), "utf8")).headers;
 const port = 5173;
 const upstream = "http://127.0.0.1:8080";
+const authFixtureFile = process.env.ZAP_AUTH_FIXTURE_PATH || "";
+const authFixtures = authFixtureFile ?
+  JSON.parse(await readFile(authFixtureFile, "utf8")) : null;
+// Fail startup if the temporary fixture is malformed. All data is test-only.
+for (const name of ["owner-a", "owner-b"]) {
+  if (!authFixtures) break;
+  const account = authFixtures[name];
+  if (!account ||
+      !/^[0-9a-f]{64}$/.test(account.token || "") ||
+      !/^[0-9a-f-]{36}$/.test(account.storeId || "") ||
+      !/^[0-9a-f-]{36}$/.test(account.orderId || "")) {
+    throw new Error("Invalid CI-only authentication fixture");
+  }
+}
+const authenticatedPaths = new Map([
+  ["me", () => "/api/v1/me"],
+  ["store", () => "/api/v1/store"],
+  ["dashboard", () => "/api/v1/dashboard"],
+  ["orders", () => "/api/v1/orders"],
+  ["count", () => "/api/v1/orders/count"],
+  ["mfa-status", () => "/api/v1/auth/mfa/status"],
+  ["order", acc => "/api/v1/orders/" + acc.orderId],
+  ["history", acc => "/api/v1/orders/" + acc.orderId + "/history"],
+  ["export", () => "/api/v1/orders/export"]
+]);
 
 const mime = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -62,6 +87,51 @@ const server = createServer(async (req, res) => {
 
   if (!["GET", "HEAD"].includes(method)) {
     respond(res, 405, "text/plain; charset=utf-8", "Read-only CI target", method);
+    return;
+  }
+
+  // Server-side session injection for two synthetic, MFA-verified OWNER users.
+  // The browser/ZAP never receives a bearer token: it only sees the resulting
+  // authenticated, test-only GET responses. No writes are proxied.
+  if (path === "/__ci__/auth-index") {
+    if (!authFixtures) {
+      respond(res, 404, "text/plain; charset=utf-8", "QA auth fixtures unavailable", method);
+      return;
+    }
+    const links = ["owner-a", "owner-b"].flatMap(
+      name => [...authenticatedPaths.keys()].map(
+        key => '<li><a href="/__ci__/authenticated/' + name + '/' + key +
+               '">' + name + ": " + key + "</a></li>"
+      )
+    ).join("");
+    respond(res, 200, "text/html; charset=utf-8",
+      "<!doctype html><html><head><title>Isolated authenticated GET checks</title></head>" +
+      "<body><h1>Two isolated merchant sessions (MFA verified)</h1><ul>" +
+      links + "</ul></body></html>", method);
+    return;
+  }
+  if (path.startsWith("/__ci__/authenticated/")) {
+    const parts = path.split("/");
+    if (!authFixtures || parts.length !== 5 || !["owner-a", "owner-b"].includes(parts[3]) ||
+        !authenticatedPaths.has(parts[4])) {
+      respond(res, 404, "text/plain; charset=utf-8", "Not an allowed QA GET route", method);
+      return;
+    }
+    const acc = authFixtures[parts[3]];
+    const apiPath = authenticatedPaths.get(parts[4])(acc);
+    try {
+      const response = await fetch(upstream + apiPath, {
+        method, redirect: "manual",
+        headers: { "Authorization": "Bearer " + acc.token, "X-Store-Id": acc.storeId },
+        signal: AbortSignal.timeout(6000)
+      });
+      res.statusCode = response.status;
+      res.setHeader("Content-Type",
+        response.headers.get("content-type") || "application/json; charset=utf-8");
+      res.end(method === "HEAD" ? undefined : Buffer.from(await response.arrayBuffer()));
+    } catch {
+      respond(res, 503, "text/plain; charset=utf-8", "Isolated GET proxy unavailable", method);
+    }
     return;
   }
 
