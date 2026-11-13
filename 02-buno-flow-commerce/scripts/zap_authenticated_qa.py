@@ -139,6 +139,12 @@ def sanitized_alerts():
         for alert in alerts:
             plugin = str(alert.get("pluginId") or alert.get("pluginid") or "unknown")
             risk = str(alert.get("riskcode", ""))
+            if risk not in ("0", "1", "2", "3"):
+                # ZAP core/view/alerts commonly returns human "risk"
+                # without "riskcode", unlike ZAP baseline JSON reports.
+                human = str(alert.get("risk", "")).strip().lower().split(" ", 1)[0]
+                risk = {"informational": "0", "info": "0", "low": "1",
+                        "medium": "2", "high": "3"}.get(human, "")
             guarantee(risk in ("0", "1", "2", "3"), "unknown ZAP severity")
             name = str(alert.get("name", "Unnamed alert"))[:120]
             # Discard URLs, query, headers, evidence, messages, user/store/tokens.
