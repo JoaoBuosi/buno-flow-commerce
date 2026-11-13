@@ -25,7 +25,7 @@ REQUIRED_TABLES = frozenset((
     "auth_ip_rate_limits", "owner_mfa", "owner_mfa_challenges",
     "owner_mfa_recovery_codes",
 ))
-IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*\\Z")
+IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*\Z")
 LIST_TABLES_SQL = """
 SELECT tablename FROM pg_catalog.pg_tables
 WHERE schemaname = 'flow_commerce' ORDER BY tablename
