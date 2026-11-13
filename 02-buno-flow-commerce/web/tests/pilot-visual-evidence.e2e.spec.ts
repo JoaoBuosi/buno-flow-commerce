@@ -32,6 +32,7 @@ async function openDemoMerchant(page: Page) {
   await expect(page.getByRole("region", { name: "Preparação do piloto privado" }))
     .toBeVisible();
   await expect(page.getByText("Não liberado comercialmente")).toBeVisible();
+  await expect(page.locator(".stats strong").first()).toHaveText(/^\d+$/);
 }
 
 async function capture(page: Page, testInfo: TestInfo, name: string) {
@@ -47,7 +48,7 @@ async function capture(page: Page, testInfo: TestInfo, name: string) {
     path: testInfo.outputPath("pilot-" + name + ".png"),
     fullPage: true,
     animations: "disabled",
-    mask: [page.locator(".asideBottom b")]
+    mask: [page.locator(".asideBottom b"), page.locator(".panel p.muted").filter({ hasText: "Identificação:" })]
   });
 }
 
