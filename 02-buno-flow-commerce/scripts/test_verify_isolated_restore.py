@@ -3,9 +3,9 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, call
 
-from verify_isolated_restore import validate_target, validate_output, pg_env
+from verify_isolated_restore import validate_target, validate_source, validate_output, pg_env, verify
 
 
 class IsolatedRestoreGuards(unittest.TestCase):
@@ -62,6 +62,41 @@ class IsolatedRestoreGuards(unittest.TestCase):
             for key in ("PGHOSTADDR","PGSERVICE","PGSERVICEFILE","PGOPTIONS",
                         "PGTARGETSESSIONATTRS"):
                 self.assertNotIn(key, env)
+
+    def test_backup_source_cannot_be_local_or_unencrypted(self):
+        sources = [
+            {"PGHOST":"localhost","PGSSLMODE":"require","PGUSER":"reader"},
+            {"PGHOST":"db.example.test","PGSSLMODE":"disable","PGUSER":"reader"},
+            {"PGHOST":"db.example.test","PGSSLMODE":"require","PGUSER":"postgres"},
+            {"PGHOST":"db.example.test","PGSSLMODE":"require","PGUSER":"postgres.project"},
+            {"PGHOST":"db.example.test","PGSSLMODE":"require","PGUSER":"supabase_admin"},
+        ]
+        for source in sources:
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                validate_source(source)
+        validate_source({"PGHOST":"db.example.test","PGSSLMODE":"verify-full","PGUSER":"export_reader"})
+
+    def test_source_sessions_are_forced_read_only(self):
+        with patch.dict(os.environ, {
+                "FLOW_BACKUP_SOURCE_PGHOST":"db.example.test",
+                "FLOW_BACKUP_SOURCE_PGPORT":"5432",
+                "FLOW_BACKUP_SOURCE_PGDATABASE":"commerce",
+                "FLOW_BACKUP_SOURCE_PGUSER":"export_reader",
+                "FLOW_BACKUP_SOURCE_PGSSLMODE":"require"
+                }, clear=True):
+            env = pg_env("FLOW_BACKUP_SOURCE_","require")
+            self.assertEqual(env["PGOPTIONS"],"-c default_transaction_read_only=on")
+
+    def test_privileged_source_is_denied_before_any_dump_or_restore(self):
+        src={"PGHOST":"db.example.test","PGPORT":"5432","PGDATABASE":"commerce",
+             "PGUSER":"export_reader","PGSSLMODE":"require"}
+        dst={"PGHOST":"127.0.0.1","PGPORT":"5432","PGDATABASE":"flow_restore_ci"}
+        with patch("verify_isolated_restore.query",side_effect=["0","privileged"]) as q, \\
+             patch("verify_isolated_restore.run") as run:
+            with self.assertRaisesRegex(ValueError,"privilégios"):
+                verify(Path("/tmp/nonexistent-backup.dump"),src,dst)
+            self.assertEqual(q.call_count,2)
+            run.assert_not_called()
 
     def test_libhq_env_keeps_password_out_of_parameters(self):
         with patch.dict(os.environ, {
