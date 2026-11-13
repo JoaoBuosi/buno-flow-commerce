@@ -42,7 +42,6 @@ jobs:
       COMMERCE_MAIL_ENABLED: 'false'
       COMMERCE_PILOT_ONLY: 'false'
       VITE_API_URL: same-origin
-      ZAP_AUTH_FIXTURE_PATH: ${{ runner.temp }}/zap-auth/auth-fixtures.json
     steps:
       - uses: actions/checkout@v6
         with:
@@ -75,6 +74,7 @@ jobs:
           import base64, secrets
           print('COMMERCE_MFA_ENCRYPTION_KEY=' + base64.b64encode(secrets.token_bytes(32)).decode())
           PY
+          echo "ZAP_AUTH_FIXTURE_PATH=$RUNNER_TEMP/zap-auth/auth-fixtures.json" >> "$GITHUB_ENV"
       - name: Start isolated API
         shell: bash
         working-directory: 02-buno-flow-commerce
