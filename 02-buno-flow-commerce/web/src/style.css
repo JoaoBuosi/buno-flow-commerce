@@ -69,3 +69,9 @@
   .tableWrap{width:100%;max-width:100%;overflow-x:auto}
   .panelHead > *{min-width:0}
 }
+
+/* Explicit horizontal-navigation affordance on narrow QA pilot screens. */
+.navHint{display:none}
+@media(max-width:1000px){
+  .navHint{display:block;flex:1 1 100%;width:100%;font-size:11px;color:#a9b5cb;margin-top:-8px;padding:0 2px 3px}
+}
