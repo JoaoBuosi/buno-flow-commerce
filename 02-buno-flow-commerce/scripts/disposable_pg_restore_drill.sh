@@ -62,10 +62,10 @@ restore_digest="$(docker exec "$name" psql -At -U postgres -d synthetic_restore 
   -c "SELECT md5(string_agg(id::text || ':' || status, ',' ORDER BY id)) FROM flow_commerce.synthetic_orders")"
 source_stores="$(docker exec "$name" psql -At -U postgres -d synthetic_source -c 'SELECT count(*) FROM flow_commerce.synthetic_stores')"
 restore_stores="$(docker exec "$name" psql -At -U postgres -d synthetic_restore -c 'SELECT count(*) FROM flow_commerce.synthetic_stores')"
-source_constraints="$(docker exec "$name" psql -At -U postgres -d synthetic_source -c "SELECT count(*) FROM pg_constraint WHERE connamespace='flow_commerce'::regnamespace AND contype='f')"
-restore_constraints="$(docker exec "$name" psql -At -U postgres -d synthetic_restore -c "SELECT count(*) FROM pg_constraint WHERE connamespace='flow_commerce'::regnamespace AND contype='f')"
-source_indexes="$(docker exec "$name" psql -At -U postgres -d synthetic_source -c "SELECT count(*) FROM pg_indexes WHERE schemaname='flow_commerce')"
-restore_indexes="$(docker exec "$name" psql -At -U postgres -d synthetic_restore -c "SELECT count(*) FROM pg_indexes WHERE schemaname='flow_commerce')"
+source_constraints="$(docker exec "$name" psql -At -U postgres -d synthetic_source -c "SELECT count(*) FROM pg_constraint WHERE connamespace='flow_commerce'::regnamespace AND contype='f'")"
+restore_constraints="$(docker exec "$name" psql -At -U postgres -d synthetic_restore -c "SELECT count(*) FROM pg_constraint WHERE connamespace='flow_commerce'::regnamespace AND contype='f'")"
+source_indexes="$(docker exec "$name" psql -At -U postgres -d synthetic_source -c "SELECT count(*) FROM pg_indexes WHERE schemaname='flow_commerce'")"
+restore_indexes="$(docker exec "$name" psql -At -U postgres -d synthetic_restore -c "SELECT count(*) FROM pg_indexes WHERE schemaname='flow_commerce'")"
 if [[ "$source_count" != "3" || "$restore_count" != "3" || "$source_digest" != "$restore_digest" ||
       "$source_stores" != "2" || "$restore_stores" != "2" ||
       "$source_constraints" != "1" || "$restore_constraints" != "1" ||
