@@ -1,0 +1,78 @@
+name: Flow Commerce 0.5.12 - commercial release safety
+on:
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/src/main/java/dev/buno/app/CommercialStartupGuard.java'
+      - '02-buno-flow-commerce/src/main/java/dev/buno/app/Application.java'
+      - '02-buno-flow-commerce/src/test/java/dev/buno/app/CommercialStartupGuardTest.java'
+      - '02-buno-flow-commerce/scripts/commercial_go_live_gate_0512.py'
+      - '02-buno-flow-commerce/scripts/test_commercial_go_live_gate_0512.py'
+      - '02-buno-flow-commerce/docs/COMMERCIAL_RELEASE_SAFETY_0_5_12.md'
+      - '.github/workflows/flow-commerce-release-safety-0512.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release-evidence-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate release-gate Python and negative cases
+        working-directory: 02-buno-flow-commerce
+        run: |
+          python3 -m py_compile scripts/commercial_go_live_gate_0512.py scripts/test_commercial_go_live_gate_0512.py
+          python3 -m unittest discover -s scripts -p 'test_commercial_go_live_gate_0512.py' -v
+      - name: Prove undocumented or absent evidence never releases
+        working-directory: 02-buno-flow-commerce
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python3 scripts/commercial_go_live_gate_0512.py /path/that/does/not/exist --candidate-sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; then
+            echo 'FAIL: missing evidence was accepted'
+            exit 1
+          fi
+          echo 'PASS: missing real release evidence is blocked'
+  production-config-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: 02-buno-flow-commerce/pom.xml
+      - name: Unit-test production configuration failure conditions
+        working-directory: 02-buno-flow-commerce
+        run: mvn -B -Dtest=CommercialStartupGuardTest test
+      - name: Build executable API package
+        working-directory: 02-buno-flow-commerce
+        run: mvn -B -DskipTests package
+      - name: Confirm unsafe production refuses to start before PostgreSQL/Flyway
+        working-directory: 02-buno-flow-commerce
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          RAILWAY_ENVIRONMENT_NAME=production timeout 20s java -jar target/buno-flow-commerce-0.2.0-SNAPSHOT.jar >/tmp/release-safety-startup.log 2>&1
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ] || [ "$code" -eq 124 ]; then
+            echo 'FAIL: unsafe production startup was not rejected'
+            exit 1
+          fi
+          if ! grep -q 'COMMERCIAL STARTUP BLOCKED' /tmp/release-safety-startup.log; then
+            echo 'FAIL: expected fail-closed reason absent'
+            exit 1
+          fi
+          if grep -Eiq 'Starting Application|HikariPool.*Starting|Flyway.*migrat' /tmp/release-safety-startup.log; then
+            echo 'FAIL: application/database initialization started before guard'
+            exit 1
+          fi
+          echo 'PASS: unsafe production startup rejected before database initialization'
