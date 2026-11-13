@@ -1,0 +1,28 @@
+name: Flow Commerce 0.5.9 - offline pilot readiness policy
+on:
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/scripts/pilot_readiness_gate.py'
+      - '02-buno-flow-commerce/scripts/test_pilot_readiness_gate.py'
+      - '02-buno-flow-commerce/docs/PILOT_READINESS_0_5_9.md'
+      - '.github/workflows/flow-commerce-pilot-readiness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  policy-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile offline gate and tests
+        working-directory: 02-buno-flow-commerce
+        run: python3 -m py_compile scripts/pilot_readiness_gate.py scripts/test_pilot_readiness_gate.py
+      - name: Run fail-closed recovery and security gate regression tests
+        working-directory: 02-buno-flow-commerce
+        run: python3 -m unittest discover -s scripts -p 'test_pilot_readiness_gate.py' -v
+      - name: Confirm no production credentials or privileged API needed
+        run: |
+          echo 'Offline policy tests only. Real backup restore, email, key escrow and pentest remain manual approval gates.'
