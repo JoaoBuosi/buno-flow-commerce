@@ -10,3 +10,10 @@ id = "generic-api-key"
   regexTarget = "secret"
   paths = ['''^02-buno-flow-commerce/src/test/java/dev/buno/app/OwnerMfaIntegrationTest\.java$''']
   regexes = ['''^MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=$''']
+
+  [[rules.allowlists]]
+  description = "Exact disposable Playwright a11y password fixture in a single browser test; not a service credential"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^02-buno-flow-commerce/web/tests/pilot-accessibility\.e2e\.spec\.ts$''']
+  regexes = ['''^synthetic-a11y-test-2026$''']
