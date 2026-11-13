@@ -36,8 +36,16 @@ if [[ "$ready" != 1 ]]; then
 fi
 docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d synthetic_source <<'SQL' >/dev/null
 CREATE SCHEMA flow_commerce;
-CREATE TABLE flow_commerce.synthetic_orders (id integer PRIMARY KEY, status text NOT NULL);
-INSERT INTO flow_commerce.synthetic_orders VALUES (1,'CREATED'),(2,'PAID'),(3,'SHIPPED');
+CREATE TABLE flow_commerce.synthetic_stores (id integer PRIMARY KEY, name text NOT NULL);
+CREATE TABLE flow_commerce.synthetic_orders (
+  id integer PRIMARY KEY,
+  store_id integer NOT NULL REFERENCES flow_commerce.synthetic_stores(id),
+  status text NOT NULL CHECK (status IN ('CREATED','PAID','SHIPPED'))
+);
+CREATE INDEX synthetic_orders_store_idx ON flow_commerce.synthetic_orders(store_id);
+INSERT INTO flow_commerce.synthetic_stores VALUES (1,'Synthetic A'),(2,'Synthetic B');
+INSERT INTO flow_commerce.synthetic_orders VALUES
+  (1,1,'CREATED'),(2,1,'PAID'),(3,2,'SHIPPED');
 SQL
 # Archive remains inside container; no exported dumps or persistent volumes.
 docker exec "$name" pg_dump -U postgres -d synthetic_source -Fc -f /tmp/restore-drill.dump
@@ -52,9 +60,18 @@ source_digest="$(docker exec "$name" psql -At -U postgres -d synthetic_source \
   -c "SELECT md5(string_agg(id::text || ':' || status, ',' ORDER BY id)) FROM flow_commerce.synthetic_orders")"
 restore_digest="$(docker exec "$name" psql -At -U postgres -d synthetic_restore \
   -c "SELECT md5(string_agg(id::text || ':' || status, ',' ORDER BY id)) FROM flow_commerce.synthetic_orders")"
-if [[ "$source_count" != "3" || "$restore_count" != "3" || "$source_digest" != "$restore_digest" ]]; then
+source_stores="$(docker exec "$name" psql -At -U postgres -d synthetic_source -c 'SELECT count(*) FROM flow_commerce.synthetic_stores')"
+restore_stores="$(docker exec "$name" psql -At -U postgres -d synthetic_restore -c 'SELECT count(*) FROM flow_commerce.synthetic_stores')"
+source_constraints="$(docker exec "$name" psql -At -U postgres -d synthetic_source -c "SELECT count(*) FROM pg_constraint WHERE connamespace='flow_commerce'::regnamespace AND contype='f'")"
+restore_constraints="$(docker exec "$name" psql -At -U postgres -d synthetic_restore -c "SELECT count(*) FROM pg_constraint WHERE connamespace='flow_commerce'::regnamespace AND contype='f'")"
+source_indexes="$(docker exec "$name" psql -At -U postgres -d synthetic_source -c "SELECT count(*) FROM pg_indexes WHERE schemaname='flow_commerce'")"
+restore_indexes="$(docker exec "$name" psql -At -U postgres -d synthetic_restore -c "SELECT count(*) FROM pg_indexes WHERE schemaname='flow_commerce'")"
+if [[ "$source_count" != "3" || "$restore_count" != "3" || "$source_digest" != "$restore_digest" ||
+      "$source_stores" != "2" || "$restore_stores" != "2" ||
+      "$source_constraints" != "1" || "$restore_constraints" != "1" ||
+      "$source_indexes" != "$restore_indexes" ]]; then
   echo "FAIL: synthetic restore verification mismatch" >&2
   exit 1
 fi
-echo "PASS: disposable PostgreSQL 17 pg_dump/pg_restore, schema, row count and digest match"
+echo "PASS: disposable PostgreSQL 17 pg_dump/pg_restore, schemas, store/order counts, foreign keys, indexes and order digest match"
 echo "LIMIT: synthetic data only; real Supabase backup remains untested"

@@ -1,0 +1,33 @@
+name: Flow Commerce 0.5.10 - recovery and monitoring regression
+on:
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/scripts/monitor_alert_gate.py'
+      - '02-buno-flow-commerce/scripts/test_monitor_alert_gate.py'
+      - '02-buno-flow-commerce/scripts/real_restore_preflight.py'
+      - '02-buno-flow-commerce/scripts/test_real_restore_preflight.py'
+      - '02-buno-flow-commerce/docs/RECOVERY_RELIABILITY_0_5_10.md'
+      - '.github/workflows/flow-commerce-reliability-0510.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-alert-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Compile monitor policy
+        working-directory: 02-buno-flow-commerce
+        run: python3 -m py_compile scripts/monitor_alert_gate.py scripts/test_monitor_alert_gate.py
+      - name: Exercise availability, unauthorized-access and alert failures
+        working-directory: 02-buno-flow-commerce
+        run: python3 -m unittest discover -s scripts -p 'test_monitor_alert_gate.py' -v
+      - name: Validate authorized restore preflight without accessing databases
+        working-directory: 02-buno-flow-commerce
+        run: python3 -m unittest discover -s scripts -p 'test_real_restore_preflight.py' -v
+      - name: Explain alert scope
+        run: |
+          echo 'Offline alert decision tests only; no real alert notification, SLO, or remote request.'

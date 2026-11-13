@@ -139,6 +139,24 @@ class EmailRecoveryIntegrationTest {
       .andExpect(status().isOk());
   }
 
+  @Test void inventedResetTokenNeverRevokesValidSession() throws Exception {
+    Pilot user=register();
+    mvc.perform(post("/api/v1/auth/reset/complete").contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsString(Map.of(
+          "token","0".repeat(64),
+          "newPassword","unauthorized-password-2026"))))
+      .andExpect(status().isBadRequest());
+    mvc.perform(get("/api/v1/dashboard")
+        .header("Authorization","Bearer "+user.token())
+        .header("X-Store-Id",user.store()))
+      .andExpect(status().isOk());
+    mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsString(Map.of(
+          "email",user.email(),"password","initial-safe-password-2026"))))
+      .andExpect(status().isOk());
+    verifyNoInteractions(mail);
+  }
+
   @Test void smtpFailureRollsBackTokenAndStillHidesAccountExistence() throws Exception {
     Pilot user=register();
     doThrow(new MailSendException("internal SMTP endpoint should never be exposed"))
