@@ -26,14 +26,24 @@ O SQL abaixo é um modelo para revisão por responsável autorizado. Não o apli
 
 ~~~sql
 -- Conta sem senha até provisionamento seguro por administrador autorizado.
-CREATE ROLE flow_backup_export WITH LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+CREATE ROLE flow_backup_export WITH LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 GRANT CONNECT ON DATABASE postgres TO flow_backup_export;
 GRANT USAGE ON SCHEMA flow_commerce TO flow_backup_export;
 GRANT SELECT ON ALL TABLES IN SCHEMA flow_commerce TO flow_backup_export;
 GRANT SELECT ON ALL SEQUENCES IN SCHEMA flow_commerce TO flow_backup_export;
 ~~~
 
-Use uma role existente, se houver uma aprovada e equivalente, em vez de criar outra. Não conceder INSERT/UPDATE/DELETE, superuser, BYPASSRLS, CREATE, USAGE/UPDATE em sequences (permitem avançar ou alterar sequência), acesso público ou permissões de outros schemas. Reavaliar grants após migrações; revogar credenciais temporárias ao final. O helper verifica privilégios reais e aborta antes de criar dump se houver escrita/administração.
+Use uma role existente, se houver uma aprovada e equivalente, em vez de criar outra. Não conceder INSERT/UPDATE/DELETE, superuser, BYPASSRLS, CREATE, USAGE/UPDATE em sequences (permitem avançar ou alterar sequência), acesso público ou permissões de outros schemas. Reavaliar grants após migrações; revogar credenciais temporárias ao final. O helper verifica privilégios reais e aborta antes de criar dump se houver escrita/administração, BYPASSRLS ou participação em outras roles. A criação da role **não** define sua senha nem habilita por si só o backup; o acesso exige configuração posterior em cofre aprovado e teste de conexão supervisionado.
+
+### Verificação da role após aprovação (somente metadados)
+
+A role exata `flow_backup_export` não existia na consulta de catálogo mais recente. Quando houver autorização para criá-la, o responsável deverá confirmar em consulta de leitura que:
+- `rolcanlogin=true`; `rolsuper=false`, `rolcreaterole=false`, `rolcreatedb=false`, `rolreplication=false`, `rolbypassrls=false`;
+- não há associações de role em `pg_auth_members`;
+- não existem privilégios de escrita em tabelas, colunas ou sequências; somente leitura de `flow_commerce`;
+- o acesso com credencial do cofre funciona por TLS e as consultas de leitura são permitidas, mas INSERT/UPDATE/DELETE/nextval não são.
+
+Nunca registrar segredo em PR, SQL, saída de log ou chat. Permissões mínimas não substituem confirmação de que o schema está privado e o destino é realmente isolado.
 
 ## Etapa 1 — estação e preflight SEM conexão
 
