@@ -91,8 +91,8 @@ class IsolatedRestoreGuards(unittest.TestCase):
         src={"PGHOST":"db.example.test","PGPORT":"5432","PGDATABASE":"commerce",
              "PGUSER":"export_reader","PGSSLMODE":"require"}
         dst={"PGHOST":"127.0.0.1","PGPORT":"5432","PGDATABASE":"flow_restore_ci"}
-        with patch("verify_isolated_restore.query",side_effect=["0","privileged"]) as q, \\
-             patch("verify_isolated_restore.run") as run:
+        with (patch("verify_isolated_restore.query",side_effect=["0","privileged"]) as q,
+              patch("verify_isolated_restore.run") as run):
             with self.assertRaisesRegex(ValueError,"privilégios"):
                 verify(Path("/tmp/nonexistent-backup.dump"),src,dst)
             self.assertEqual(q.call_count,2)
