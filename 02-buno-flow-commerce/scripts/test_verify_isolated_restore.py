@@ -97,6 +97,11 @@ class IsolatedRestoreGuards(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"privilégios"):
                 verify(Path("/tmp/nonexistent-backup.dump"),src,dst)
             self.assertEqual(q.call_count,2)
+            privilege_sql = q.call_args_list[1].args[0]
+            self.assertIn("rolbypassrls", privilege_sql)
+            self.assertIn("pg_catalog.pg_auth_members", privilege_sql)
+            self.assertIn("has_any_column_privilege", privilege_sql)
+            self.assertIn("has_sequence_privilege", privilege_sql)
             run.assert_not_called()
 
     def test_real_schema_all_thirteen_required_tables(self):
