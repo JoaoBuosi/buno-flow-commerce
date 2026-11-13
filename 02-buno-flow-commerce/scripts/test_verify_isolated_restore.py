@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch, call
 
-from verify_isolated_restore import validate_target, validate_source, validate_output, pg_env, verify
+from verify_isolated_restore import validate_target, validate_source, validate_output, pg_env, verify, REQUIRED_TABLES, parse_table_names
 
 
 class IsolatedRestoreGuards(unittest.TestCase):
@@ -97,6 +97,40 @@ class IsolatedRestoreGuards(unittest.TestCase):
                 verify(Path("/tmp/nonexistent-backup.dump"),src,dst)
             self.assertEqual(q.call_count,2)
             run.assert_not_called()
+
+    def test_real_schema_all_thirteen_required_tables(self):
+        self.assertEqual(len(REQUIRED_TABLES), 13)
+        self.assertIn("owner_mfa_recovery_codes", REQUIRED_TABLES)
+        self.assertIn("owner_mfa_challenges", REQUIRED_TABLES)
+        self.assertIn("owner_mfa", REQUIRED_TABLES)
+        self.assertIn("auth_ip_rate_limits", REQUIRED_TABLES)
+
+    def test_missing_mfa_table_is_rejected(self):
+        listing = "\\n".join(sorted(REQUIRED_TABLES - {"owner_mfa"}))
+        with self.assertRaisesRegex(RuntimeError, "obrigatórias"):
+            parse_table_names(listing)
+
+    def test_new_tables_are_also_verified_and_not_ignored(self):
+        listing = "\\n".join(sorted(REQUIRED_TABLES | {"new_future_table"}))
+        self.assertEqual(len(parse_table_names(listing)), 14)
+
+    def test_catalog_rejects_sql_injection_like_names(self):
+        listing = "\\n".join(sorted(REQUIRED_TABLES)) + "\\norders; DROP SCHEMA flow_commerce"
+        with self.assertRaisesRegex(RuntimeError, "malformado"):
+            parse_table_names(listing)
+
+    def test_incomplete_source_schema_blocks_before_dump(self):
+        src={"PGHOST":"db.example.test","PGPORT":"5432","PGDATABASE":"commerce",
+             "PGUSER":"export_reader","PGSSLMODE":"require"}
+        dst={"PGHOST":"127.0.0.1","PGPORT":"5432","PGDATABASE":"flow_restore_ci"}
+        incomplete="\\n".join(sorted(REQUIRED_TABLES - {"auth_ip_rate_limits"}))
+        with (patch("verify_isolated_restore.query",
+                    side_effect=["0","readonly",incomplete]) as q,
+              patch("verify_isolated_restore.run") as command):
+            with self.assertRaisesRegex(RuntimeError,"obrigatórias"):
+                verify(Path("/tmp/should-not-exist.dump"),src,dst)
+            self.assertEqual(q.call_count,3)
+            command.assert_not_called()
 
     def test_libhq_env_keeps_password_out_of_parameters(self):
         with patch.dict(os.environ, {
