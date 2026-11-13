@@ -23,6 +23,20 @@ Novo arquivo `web/tests/pilot-readiness.e2e.spec.ts`, integrado à suíte browse
 
 **Escopo:** estes testes verificam o navegador Chromium em viewport de desktop e de celular, não substituem revisão humana no dispositivo nem comprovam e-mails reais, backups reais ou disponibilidade do staging.
 
+## Evidências visuais para revisão humana (QA isolado)
+
+A suíte Playwright ganhou `web/tests/pilot-visual-evidence.e2e.spec.ts`, com seis capturas de telas sintéticas:
+
+- Desktop (1440×900): visão geral, pedidos e configurações.
+- Mobile (390×844): visão geral, pedidos e configurações.
+- Em todas as capturas, o teste comprova ausência de rolagem horizontal na página inteira. O identificador da loja, mesmo sendo fictício, é mascarado.
+- Só é permitido executar a suíte contra API e frontend em `127.0.0.1`; `EXTERNAL_FRONTEND_URL` bloqueia o teste.
+- Nenhum token, cookie, log de tráfego, senha, caixa QA ou backup é anexado.
+
+O workflow `.github/workflows/flow-commerce-e2e.yml` publica o artifact **`flow-commerce-0511-synthetic-visual-review`** por **3 dias**. Para revisar: GitHub → PR #18 → Checks → execução `Flow Commerce - browser E2E` → Artifacts → download do ZIP. Inspecionar visualmente cada uma das seis telas no desktop e no celular. Caso não apareça o artifact, não marcar a revisão como concluída.
+
+**Evidência automatizada não equivale a aprovação de UX por pessoa:** verificar legibilidade, foco, touch targets, contraste, clareza de mensagens, ordem de navegação e consistência entre telas. Aprovação depende de revisão humana explícita.
+
 ## O que NÃO foi implementado
 
 - Não há notificações externas reais. Arquivo JSONL local é somente uma prova do mecanismo de emissão, **não** de entrega a alguém.
