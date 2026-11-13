@@ -1,0 +1,33 @@
+name: Flow Commerce 0.5.9 - disposable PostgreSQL recovery drill
+on:
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/scripts/disposable_pg_restore_drill.sh'
+      - '02-buno-flow-commerce/docs/OPERATIONAL_HOMOLOGATION_0_5_9.md'
+      - '.github/workflows/flow-commerce-disposable-restore.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CI: 'true'
+      FLOW_DISPOSABLE_RESTORE: explicit-local-only
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check script syntax
+        run: bash -n 02-buno-flow-commerce/scripts/disposable_pg_restore_drill.sh
+      - name: Verify fail-closed guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if env -u FLOW_DISPOSABLE_RESTORE bash 02-buno-flow-commerce/scripts/disposable_pg_restore_drill.sh; then
+            echo '::error::Guard unexpectedly allowed execution'
+            exit 1
+          fi
+      - name: Run isolated PostgreSQL 17 backup and restore on synthetic rows
+        run: bash 02-buno-flow-commerce/scripts/disposable_pg_restore_drill.sh

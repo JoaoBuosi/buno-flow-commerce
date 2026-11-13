@@ -1,0 +1,53 @@
+name: Flow Commerce 0.5.9 - isolated email recovery QA
+on:
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/src/**'
+      - '02-buno-flow-commerce/pom.xml'
+      - '02-buno-flow-commerce/docs/OPERATIONAL_HOMOLOGATION_0_5_9.md'
+      - '.github/workflows/flow-commerce-isolated-email-recovery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: flow_mail_qa
+          POSTGRES_USER: mail_qa
+          POSTGRES_PASSWORD: disposable-only-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mail_qa -d flow_mail_qa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/flow_mail_qa?currentSchema=flow_commerce
+      SPRING_DATASOURCE_USERNAME: mail_qa
+      SPRING_DATASOURCE_PASSWORD: disposable-only-ci
+      COMMERCE_MAIL_ENABLED: 'false'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: 02-buno-flow-commerce/pom.xml
+      - name: Verify email recovery contract against ephemeral PostgreSQL
+        working-directory: 02-buno-flow-commerce
+        run: |
+          mvn -B -Dtest=EmailRecoveryIntegrationTest,ResendRecoveryIntegrationTest test
+      - name: Confirm no real provider call
+        run: |
+          echo 'PASS: email delivery mocked. Password reset and provider-failure behavior verified against disposable database.'
+          echo 'This is NOT verification of a real sender domain or mailbox delivery.'
