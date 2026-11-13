@@ -134,7 +134,12 @@ def verify(output: Path, source: dict[str, str], destination: dict[str, str]) ->
       SELECT CASE WHEN
         NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles
                     WHERE rolname = current_user
-                      AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication))
+                      AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls))
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_catalog.pg_auth_members am
+          JOIN pg_catalog.pg_roles r ON r.oid=am.member
+          WHERE r.rolname = current_user
+        )
         AND session_user = current_user
         AND NOT has_schema_privilege(current_user, 'flow_commerce', 'CREATE')
         AND NOT EXISTS (
