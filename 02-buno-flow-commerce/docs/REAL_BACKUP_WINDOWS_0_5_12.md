@@ -30,10 +30,10 @@ CREATE ROLE flow_backup_export WITH LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCRE
 GRANT CONNECT ON DATABASE postgres TO flow_backup_export;
 GRANT USAGE ON SCHEMA flow_commerce TO flow_backup_export;
 GRANT SELECT ON ALL TABLES IN SCHEMA flow_commerce TO flow_backup_export;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA flow_commerce TO flow_backup_export;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA flow_commerce TO flow_backup_export;
 ~~~
 
-Use uma role existente, se houver uma aprovada e equivalente, em vez de criar outra. Não conceder INSERT/UPDATE/DELETE, superuser, BYPASSRLS, CREATE, acesso público ou permissões de outros schemas. Reavaliar grants após migrações; revogar credenciais temporárias ao final. O helper verifica privilégios reais e aborta antes de criar dump se houver escrita/administração.
+Use uma role existente, se houver uma aprovada e equivalente, em vez de criar outra. Não conceder INSERT/UPDATE/DELETE, superuser, BYPASSRLS, CREATE, USAGE/UPDATE em sequences (permitem avançar ou alterar sequência), acesso público ou permissões de outros schemas. Reavaliar grants após migrações; revogar credenciais temporárias ao final. O helper verifica privilégios reais e aborta antes de criar dump se houver escrita/administração.
 
 ## Etapa 1 — estação e preflight SEM conexão
 
