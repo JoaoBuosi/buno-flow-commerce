@@ -7,6 +7,8 @@ on:
       - '02-buno-flow-commerce/src/test/java/dev/buno/app/CommercialStartupGuardTest.java'
       - '02-buno-flow-commerce/scripts/verify_isolated_restore.py'
       - '02-buno-flow-commerce/scripts/test_verify_isolated_restore.py'
+      - '02-buno-flow-commerce/scripts/check_windows_backup_station.ps1'
+      - '02-buno-flow-commerce/docs/REAL_BACKUP_WINDOWS_0_5_12.md'
       - '02-buno-flow-commerce/scripts/commercial_go_live_gate_0512.py'
       - '02-buno-flow-commerce/scripts/test_commercial_go_live_gate_0512.py'
       - '02-buno-flow-commerce/docs/COMMERCIAL_RELEASE_SAFETY_0_5_12.md'
@@ -38,6 +40,22 @@ jobs:
             exit 1
           fi
           echo 'PASS: missing real release evidence is blocked'
+  windows-station-script-syntax:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate PowerShell syntax without accessing database or vault
+        shell: pwsh
+        run: |
+          $scriptPath = "02-buno-flow-commerce/scripts/check_windows_backup_station.ps1"
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $scriptPath), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw "Windows backup station PowerShell script has syntax errors" }
+          Write-Host "PASS: PowerShell parsed; no station or backup validation was performed"
   production-config-guard:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
