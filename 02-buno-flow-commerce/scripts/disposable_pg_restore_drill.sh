@@ -21,11 +21,19 @@ if ! docker exec "$name" sh -c 'test -x /usr/local/bin/docker-entrypoint.sh'; th
   docker logs --tail 35 "$name" >&2 || :
   exit 1
 fi
+ready=0
 for i in $(seq 1 45); do
-  if docker exec "$name" pg_isready -U postgres -d synthetic_source >/dev/null 2>&1; then break; fi
+  if docker exec "$name" psql -X -q -A -t -v ON_ERROR_STOP=1 -U postgres -d synthetic_source -c 'SELECT 1' 2>/dev/null | grep -qx 1; then
+    ready=1
+    break
+  fi
   sleep 1
 done
-docker exec "$name" pg_isready -U postgres -d synthetic_source >/dev/null
+if [[ "$ready" != 1 ]]; then
+  echo "FAIL: disposable synthetic_source database did not become queryable" >&2
+  docker logs --tail 25 "$name" >&2 || :
+  exit 1
+fi
 docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d synthetic_source <<'SQL' >/dev/null
 CREATE SCHEMA flow_commerce;
 CREATE TABLE flow_commerce.synthetic_orders (id integer PRIMARY KEY, status text NOT NULL);
