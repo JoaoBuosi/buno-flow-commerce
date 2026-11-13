@@ -67,11 +67,17 @@ def via_zap(method, path, payload=None, *, bearer=None, store=None):
         code = response.status
         body = response.read(150_000)
         content_type = response.getheader("Content-Type", "")
-        if "application/json" in content_type or "application/problem+json" in content_type:
+        if code >= 400:
+            # Error bodies from filters/proxies may be blank or non-JSON.
+            # Negative tests assert HTTP status, never body text or error shape.
+            parsed = {}
+        elif "application/json" in content_type:
+            if not body:
+                raise AssertionError("FAIL: successful JSON response was empty")
             try:
                 parsed = json.loads(body)
             except (ValueError, UnicodeDecodeError):
-                raise AssertionError("FAIL: invalid JSON response")
+                raise AssertionError("FAIL: invalid successful JSON response")
         else:
             parsed = body.decode("utf-8", errors="replace")
         return code, parsed
