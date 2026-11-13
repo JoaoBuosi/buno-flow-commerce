@@ -47,7 +47,30 @@ Não executar no GitHub runner. Requer máquina segura, armazenamento cifrado fo
 - Preencher evidências **sem credenciais** para `pilot_readiness_gate.py`; o gate verifica apenas a forma dos dados, não a veracidade das provas.
 - Aprovação humana assinada e estratégia de rollback exigidas antes de qualquer piloto com lojas reais.
 
-## 6. Estado e restrições
+## 6. Evidência complementar 0.5.9 — recuperação de e-mail isolada
+
+- Workflow `.github/workflows/flow-commerce-isolated-email-recovery.yml`: executa especificamente `EmailRecoveryIntegrationTest` e `ResendRecoveryIntegrationTest` em PostgreSQL temporário, com transporte SMTP/Resend mockado.
+- Critérios automatizados: reset com token temporário e uso único, invalidação de token anterior, expiração, revogação da sessão antiga, resposta genérica para e-mail desconhecido, rollback em falha de envio e limitação de reenvio.
+- Não é permitido configurar `RESEND_API_KEY`, SMTP real nem destinatários de produção nesse workflow.
+- Aprovação do workflow **não comprova** que um e-mail atravessou o provedor, SPF/DKIM ou chegou à caixa postal.
+
+### Homologação real — somente por operador autorizado, fora do CI
+
+Os arquivos de apoio já existem no **PR #10**, mas não estão na branch 0.5.9: `scripts/homologar_backup_real_windows.ps1`, `scripts/verificar_dominio_resend.ps1` e o guia `HOMOLOGACAO_BACKUP_EMAIL_0_5_3.md`. Consultar:
+https://github.com/JoaoBuosi/buno-flow-commerce/pull/10
+
+Para executar a prova real de forma segura:
+
+1. Revisar o script junto com a dependência `scripts/verify_isolated_restore.py` presente na branch atual. Não copiar ou executar um script incompleto.
+2. Confirmar o domínio verificado e controlar uma caixa de e-mail QA. Caso o domínio ainda não esteja verificado, manter o envio real **bloqueado**.
+3. Preparar ambiente de QA autorizado separado, com PostgreSQL vazio, dados fictícios, endpoint de recuperação e credenciais do provedor no cofre; confirmar previamente que o sistema não atingirá serviços reais compartilhados.
+4. Fazer uma única solicitação de reset à conta fictícia, observar o recebimento na caixa QA e validar expiração, uso único, sessão anterior revogada e ausência de token na resposta pública.
+5. Remover usuários e bancos descartáveis, não publicar URLs assinadas, tokens ou o conteúdo do e-mail; guardar apenas evidência sanitizada com aprovação humana.
+6. Em outra sessão operacional, preparar dump real autorizado com credencial **somente leitura**, armazenamento cifrado fora do Git e restore somente em PostgreSQL 17 local isolado; não levar os dados para Actions.
+
+**Os dois gates reais permanecem pendentes** até a execução supervisionada e coleta de evidências. Esta atualização não envia mensagem nem realiza dump real.
+
+## 7. Estado e restrições
 
 - PR #16 permanece rascunho; sem merge, deploy, DNS, banco compartilhado ou mudança de chave real.
 - As evidências de backup real, e-mail real, cofre MFA e pentest são **pendentes**, mesmo quando todos os jobs de CI estiverem verdes.
