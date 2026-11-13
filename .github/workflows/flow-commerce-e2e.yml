@@ -73,3 +73,12 @@ jobs:
       - name: Test full merchant browser journeys and tenant separation
         working-directory: 02-buno-flow-commerce/web
         run: npm run test:e2e
+      - name: Keep only synthetic mobile/desktop screenshots for human visual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-commerce-0511-synthetic-visual-review
+          path: 02-buno-flow-commerce/web/test-results/**/pilot-*.png
+          retention-days: 3
+          if-no-files-found: error
+          compression-level: 6
