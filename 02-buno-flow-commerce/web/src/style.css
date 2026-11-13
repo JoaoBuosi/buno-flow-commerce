@@ -82,3 +82,10 @@
   button.primary,button.secondary,button.danger,.layout nav button{min-height:44px}
   .dialog{overscroll-behavior:contain}
 }
+
+/* QA-only synthetic phone preview. This branch is never part of production. */
+.qaPreviewBadge{background:#533415;color:#ffdfaa;border:1px solid #966b32;border-radius:8px;font-weight:800;font-size:11px;letter-spacing:.6px;padding:10px;margin-bottom:16px;overflow-wrap:anywhere}
+.qaLogin{background:#22263b;border:1px solid #755a36;border-radius:12px;padding:15px;line-height:1.5;margin:18px 0}
+.qaLogin p{font-size:13px;color:#e7d8bb}
+.qaLogin .primary{min-height:46px;width:100%;font-size:14px}
+@media(max-width:1000px){.qaPreviewBadge{margin-bottom:0;flex:1 1 100%}}
