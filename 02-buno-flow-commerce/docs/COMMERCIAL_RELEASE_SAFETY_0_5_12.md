@@ -49,6 +49,17 @@ Nesses contextos, a aplicação se recusa a iniciar se não houver:
 
 Não há manifesto com aprovações reais neste PR. A execução sem evidência válida deve **falhar**. Um manifesto estruturalmente correto também precisa de revisão independente das suas provas; o script **não consulta o GitHub** para verificar links, nem permite deploy. Não armazenar evidências contendo PII no repositório ou nos artifacts.
 
+## Proteção 3 — exportação read-only do backup real
+
+O script existente `verify_isolated_restore.py` foi reforçado para:
+- exigir origem PostgreSQL remota com TLS e uma role explicitamente dedicada à exportação;
+- rejeitar usuários administrativos, incluindo padrões `postgres`, `postgres.*`, `supabase_admin` e `service_role`;
+- impor `default_transaction_read_only=on` à sessão de origem;
+- verificar em consulta exclusivamente de leitura se o usuário atual possui poderes administrativos, `CREATE` no schema ou privilégios de escrita nas tabelas;
+- **abortar antes de criar qualquer dump** quando houver privilégios de escrita, mantendo o destino local vazio e descartável.
+
+Novos testes em `test_verify_isolated_restore.py` comprovam rejeição de origem insegura e ausência de `pg_dump` na tentativa bloqueada. A revisão manual da role, ausência de túnel e criptografia do armazenamento ainda é indispensável. A configuração de produção não foi alterada.
+
 ## Testes automáticos
 
 - `CommercialStartupGuardTest`: 11 cenários, incluindo configuração incompleta, modo produção reconhecido automaticamente, password local, TLS incorreto, autenticação multifator, e-mail e CORS.
