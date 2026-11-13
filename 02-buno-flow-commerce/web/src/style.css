@@ -51,3 +51,9 @@
 
 /* CSP hardened: class instead of runtime style attribute */
 .forecastHeading{margin-top:12px}
+
+/* Strict CSP: remaining former JSX style props are now same-origin CSS classes. */
+.filePickLabel{cursor:pointer}
+.visuallyHiddenFileInput{display:none}
+.ordersPager{justify-content:space-between;margin-top:16px}
+.sourceLink{color:#b9a8ff}
