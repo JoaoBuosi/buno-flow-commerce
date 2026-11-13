@@ -1,0 +1,53 @@
+name: Flow Commerce 0.5.11 - QA alert delivery and pilot gate
+on:
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/scripts/qa_alert_delivery.py'
+      - '02-buno-flow-commerce/scripts/test_qa_alert_delivery.py'
+      - '02-buno-flow-commerce/docs/PILOT_EXPERIENCE_MONITORING_0_5_11.md'
+      - '.github/workflows/flow-commerce-pilot-monitoring-0511.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qa-local-alert:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CI: 'true'
+      FLOW_QA_ALERT_DELIVERY: disposable-only
+    defaults:
+      run:
+        working-directory: 02-buno-flow-commerce
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Compile synthetic notification code
+        run: python3 -m py_compile scripts/qa_alert_delivery.py scripts/test_qa_alert_delivery.py
+      - name: Test failure detection, authorization and redaction
+        run: python3 -m unittest discover -s scripts -p 'test_qa_alert_delivery.py' -v
+      - name: Rehearse local incident delivery (no network)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export WORKDIR="$(mktemp -d)"
+          trap 'rm -rf "$WORKDIR"' EXIT
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = {"environment":"disposable","checks":{
+            "api_health":{"http_status":503,"latency_ms":30},
+            "anonymous_api_denied":{"http_status":403,"latency_ms":40},
+            "frontend_reachable":{"http_status":401,"latency_ms":50}
+          }}
+          Path(os.environ["WORKDIR"], "sample.json").write_text(json.dumps(data), encoding="utf-8")
+          PY
+          python3 scripts/qa_alert_delivery.py "$WORKDIR/sample.json" --spool "$WORKDIR/alerts.jsonl"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          events=[json.loads(x) for x in Path(os.environ["WORKDIR"],"alerts.jsonl").read_text().splitlines()]
+          assert events == [{"type":"api_unavailable","status":"alert"}], "unexpected synthetic event"
+          print("PASS: local alert emitted, redacted and verified; no real recipient or network")
+          PY
