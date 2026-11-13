@@ -13,8 +13,14 @@ name="flow-059-restore-${GITHUB_RUN_ID:-local}"
 name="${name//[^a-zA-Z0-9_-]/-}"
 cleanup() { docker rm -f "$name" >/dev/null 2>&1 || :; }
 trap cleanup EXIT
+docker pull postgres:17-alpine >/dev/null
 docker run -d --name "$name" --network none -e POSTGRES_PASSWORD=synthetic-ci-only \
-  -e POSTGRES_DB=synthetic_source postgres:17-alpine >/dev/null
+  -e POSTGRES_DB=synthetic_source postgres:17-alpine
+if ! docker exec "$name" sh -c 'test -x /usr/local/bin/docker-entrypoint.sh'; then
+  echo "FAIL: disposable container did not initialize" >&2
+  docker logs --tail 35 "$name" >&2 || :
+  exit 1
+fi
 for i in $(seq 1 45); do
   if docker exec "$name" pg_isready -U postgres -d synthetic_source >/dev/null 2>&1; then break; fi
   sleep 1
