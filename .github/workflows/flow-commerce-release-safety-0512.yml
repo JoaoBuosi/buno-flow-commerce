@@ -5,6 +5,8 @@ on:
       - '02-buno-flow-commerce/src/main/java/dev/buno/app/CommercialStartupGuard.java'
       - '02-buno-flow-commerce/src/main/java/dev/buno/app/Application.java'
       - '02-buno-flow-commerce/src/test/java/dev/buno/app/CommercialStartupGuardTest.java'
+      - '02-buno-flow-commerce/scripts/verify_isolated_restore.py'
+      - '02-buno-flow-commerce/scripts/test_verify_isolated_restore.py'
       - '02-buno-flow-commerce/scripts/commercial_go_live_gate_0512.py'
       - '02-buno-flow-commerce/scripts/test_commercial_go_live_gate_0512.py'
       - '02-buno-flow-commerce/docs/COMMERCIAL_RELEASE_SAFETY_0_5_12.md'
@@ -25,6 +27,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/commercial_go_live_gate_0512.py scripts/test_commercial_go_live_gate_0512.py
           python3 -m unittest discover -s scripts -p 'test_commercial_go_live_gate_0512.py' -v
+          python3 -m unittest discover -s scripts -p 'test_verify_isolated_restore.py' -v
       - name: Prove undocumented or absent evidence never releases
         working-directory: 02-buno-flow-commerce
         shell: bash
