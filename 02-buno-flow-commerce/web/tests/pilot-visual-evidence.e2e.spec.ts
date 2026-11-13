@@ -3,8 +3,11 @@ import { test, expect, type Page, type TestInfo } from "@playwright/test";
 // Visual-review evidence must never run against production or a remote preview.
 // The account is newly created in disposable CI PostgreSQL and not reused.
 const api = new URL(process.env.API_URL || "http://127.0.0.1:8080/api/v1");
-if (api.protocol !== "http:" ||
-    !["127.0.0.1", "localhost", "::1"].includes(api.hostname) ||
+const frontend = new URL(process.env.FRONTEND_URL || "http://127.0.0.1:5173");
+const viteApi = new URL(process.env.VITE_API_URL || api.toString());
+if ([api, frontend, viteApi].some(url =>
+      url.protocol !== "http:" ||
+      !["127.0.0.1", "localhost", "::1"].includes(url.hostname)) ||
     process.env.EXTERNAL_FRONTEND_URL) {
   throw new Error("Synthetic screenshots require local disposable API and frontend only");
 }
