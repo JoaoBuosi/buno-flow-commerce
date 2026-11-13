@@ -29,6 +29,16 @@ def validate_target(host: str, database: str) -> None:
         raise ValueError("Banco de destino deve começar com flow_restore_ e conter somente letras minúsculas/números/_.")
 
 
+def validate_source(source: dict[str, str]) -> None:
+    host = source.get("PGHOST", "")
+    if not host or host in LOOPBACK or host in ("0.0.0.0", "::"):
+        raise ValueError("Origem de exportação deve ser remota e explicitamente aprovada.")
+    if source.get("PGSSLMODE") not in ("require", "verify-ca", "verify-full"):
+        raise ValueError("Origem exige TLS com PGSSLMODE=require/verify-ca/verify-full.")
+    user = source.get("PGUSER", "").lower()
+    if not user or user == "postgres" or user.startswith("postgres.") or user in ("supabase_admin", "service_role"):
+        raise ValueError("Origem deve usar uma role de exportação dedicada, nunca uma conta administrativa.")
+
 def validate_output(path: Path, workdir: Path) -> None:
     target = path.expanduser().resolve()
     repo = workdir.resolve()
@@ -59,6 +69,10 @@ def pg_env(prefix: str, default_ssl: str) -> dict[str, str]:
             env.pop(name, None)
     env["PGSSLMODE"] = os.getenv(prefix + "PGSSLMODE", default_ssl)
     env["PGCONNECT_TIMEOUT"] = "12"
+    if prefix == "FLOW_BACKUP_SOURCE_":
+        # Force source sessions read-only independently of their login defaults.
+        # The authorization query below also rejects roles with write privileges.
+        env["PGOPTIONS"] = "-c default_transaction_read_only=on"
     return env
 
 
@@ -79,6 +93,7 @@ def query(sql: str, env: dict[str, str]) -> str:
 
 def verify(output: Path, source: dict[str, str], destination: dict[str, str]) -> None:
     validate_target(destination["PGHOST"], destination["PGDATABASE"])
+    validate_source(source)
     if (source["PGHOST"] == destination["PGHOST"] and
         source["PGPORT"] == destination["PGPORT"] and
         source["PGDATABASE"] == destination["PGDATABASE"]):
@@ -89,6 +104,26 @@ def verify(output: Path, source: dict[str, str], destination: dict[str, str]) ->
     """, destination)
     if ready != "0":
         raise ValueError("O banco de destino contém tabelas; ABORTADO antes da restauração.")
+
+    # Refuse privileged source roles, including table owners and inherited write
+    # privileges. The operator must create an approved export-only role.
+    readonly = query("""
+      SELECT CASE WHEN
+        NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles
+                    WHERE rolname = current_user
+                      AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication))
+        AND NOT has_schema_privilege(current_user, 'flow_commerce', 'CREATE')
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_catalog.pg_tables
+           WHERE schemaname = 'flow_commerce'
+             AND has_table_privilege(current_user,
+                  quote_ident(schemaname)||'.'||quote_ident(tablename),
+                  'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        )
+      THEN 'readonly' ELSE 'privileged' END
+    """, source)
+    if readonly != "readonly":
+        raise ValueError("Role de exportação tem privilégios de escrita/administração; ABORTADO antes do dump.")
 
     # File is created exclusively with private permissions and is never replaced.
     fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
