@@ -48,6 +48,7 @@ class IsolatedRestoreGuards(unittest.TestCase):
         with patch.dict(os.environ, {
                 "PGHOSTADDR": "203.0.113.50", "PGSERVICE": "production",
                 "PGSERVICEFILE": "/tmp/evil-services",
+                "PGPASSFILE": "/tmp/ambient-password-file",
                 "PGOPTIONS": "-c search_path=production",
                 "PGTARGETSESSIONATTRS": "read-write",
                 "FLOW_RESTORE_PGHOST": "localhost",
@@ -60,7 +61,7 @@ class IsolatedRestoreGuards(unittest.TestCase):
             self.assertEqual(env["PGHOST"], "localhost")
             self.assertEqual(env["PGDATABASE"], "flow_restore_qa")
             for key in ("PGHOSTADDR","PGSERVICE","PGSERVICEFILE","PGOPTIONS",
-                        "PGTARGETSESSIONATTRS"):
+                        "PGTARGETSESSIONATTRS","PGPASSFILE"):
                 self.assertNotIn(key, env)
 
     def test_backup_source_cannot_be_local_or_unencrypted(self):
