@@ -1,7 +1,7 @@
 name: Flow Commerce - OWASP ZAP DAST (isolated baseline)
 on:
   push:
-    branches: [feat/flow-commerce-0.5.7-zap-dast]
+    branches: [feat/flow-commerce-0.5.7-zap-dast, feat/flow-commerce-0.5.8-csp-auth-dast]
     paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-zap-dast.yml']
   pull_request:
     paths: ['02-buno-flow-commerce/**', '.github/workflows/flow-commerce-zap-dast.yml']
