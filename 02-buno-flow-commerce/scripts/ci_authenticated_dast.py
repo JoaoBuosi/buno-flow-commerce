@@ -163,6 +163,20 @@ def main() -> None:
         expect("idor_foreign_order_history_404",404,
                "/orders/"+foreign["id"]+"/history",
                token=actor["token"],store=actor["store"])
+        # Targeted write-denial checks are safe because both orders are synthetic.
+        expect("idor_foreign_order_status_patch_404",404,
+               "/orders/"+foreign["id"]+"/status","PATCH",
+               {"status":"PAID"},token=actor["token"],store=actor["store"])
+        expect("idor_foreign_order_cancel_404",404,
+               "/orders/"+foreign["id"]+"/cancel","POST",
+               {"reason":"Synthetic cross-tenant security test"},
+               token=actor["token"],store=actor["store"])
+        foreign_own_detail=expect("foreign_owner_order_unchanged",200,
+               "/orders/"+foreign["id"],token=(
+                   b["token"] if actor is a else a["token"]
+               ),store=(b["store"] if actor is a else a["store"]))
+        check("cross_tenant_write_did_not_mutate_order",
+              foreign_own_detail["status"]=="CREATED")
         own_list=expect("tenant_orders_list",200,"/orders",
                         token=actor["token"],store=actor["store"])
         check("tenant_list_contains_only_own_order",
