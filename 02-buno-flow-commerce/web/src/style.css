@@ -48,3 +48,24 @@
 .mfaCodes code{font-size:12px;text-align:center;background:#0d1927;color:#d5f2e8;border:1px solid #375b55;border-radius:9px;padding:11px 5px;overflow-wrap:anywhere}
 .authCard .mfaCodes+button{margin-right:8px}
 @media(max-width:450px){.mfaCodes{grid-template-columns:1fr}}
+
+
+/* 0.5.11 mobile pilot QA: constrain grid/flex intrinsic widths to the viewport.
+   Keep wide order tables/nav internally scrollable, never the whole document. */
+.layout > main,.layout > aside,.panel,.columns{min-width:0}
+@media(max-width:1000px){
+  .layout{grid-template-columns:minmax(0,1fr)}
+  .layout > aside{max-width:100vw}
+  .layout nav{min-width:0;max-width:100%;overflow-x:auto}
+  .columns{grid-template-columns:minmax(0,1fr)}
+  .panelHead{flex-wrap:wrap;gap:10px}
+}
+@media(max-width:660px){
+  .layout main{min-width:0;max-width:100%;overflow-wrap:anywhere}
+  .layout header{flex-wrap:wrap;gap:10px}
+  .layout aside{min-width:0}
+  .layout aside nav{flex:1 1 100%;width:100%;max-width:100%;overflow-x:auto}
+  .inline{min-width:0}
+  .tableWrap{width:100%;max-width:100%;overflow-x:auto}
+  .panelHead > *{min-width:0}
+}
