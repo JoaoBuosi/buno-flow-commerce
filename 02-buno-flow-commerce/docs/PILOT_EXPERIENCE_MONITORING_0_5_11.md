@@ -10,6 +10,19 @@
 4. **Workflow:** `flow-commerce-pilot-monitoring-0511.yml` roda testes em CI e verifica uma emissão sintética local, eliminando o arquivo após o teste.
 5. **Segurança e confiabilidade:** testes existentes de autenticação, MFA, isolamento por loja, regressão Java, recuperação de senha, ZAP autenticado e restauração descartável continuam obrigatórios no CI. Não há alterações no backend de produção ou em permissões reais.
 
+## Homologação automatizada do painel do lojista (Playwright)
+
+Novo arquivo `web/tests/pilot-readiness.e2e.spec.ts`, integrado à suíte browser existente. Somente no runner descartável, com API Spring em `127.0.0.1:8080`, PostgreSQL do CI e convite sintético:
+
+- Sessão anônima não tem acesso ao painel; cadastro da loja QA e autenticação são necessários.
+- Desktop: botão **Verificar meu acesso** usa somente `GET /store` e `GET /dashboard`, sempre com token e identificador da loja corretos, e não cria pedidos.
+- Mobile (390×844): navegação painel → pedidos → visão geral → segurança, com verificação de overflow horizontal.
+- Falha simulada HTTP 503 em `GET /store`: o painel informa indisponibilidade e não libera a demonstração.
+- Segurança: backend nega token de uma loja associado a outra; se a resposta do gateway simular perfil de outra loja, o frontend também rejeita o resultado.
+- `commerce.e2e.spec.ts` continua responsável pela cobertura integrada de cadastro, pedidos, pagamento/status, CSV, histórico, cancelamento, exportação, login novamente e isolamento.
+
+**Escopo:** estes testes verificam o navegador Chromium em viewport de desktop e de celular, não substituem revisão humana no dispositivo nem comprovam e-mails reais, backups reais ou disponibilidade do staging.
+
 ## O que NÃO foi implementado
 
 - Não há notificações externas reais. Arquivo JSONL local é somente uma prova do mecanismo de emissão, **não** de entrega a alguém.
