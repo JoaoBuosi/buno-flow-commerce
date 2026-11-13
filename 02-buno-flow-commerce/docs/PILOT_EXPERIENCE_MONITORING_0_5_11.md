@@ -37,6 +37,14 @@ O workflow `.github/workflows/flow-commerce-e2e.yml` publica o artifact **`flow-
 
 **Evidência automatizada não equivale a aprovação de UX por pessoa:** verificar legibilidade, foco, touch targets, contraste, clareza de mensagens, ordem de navegação e consistência entre telas. Aprovação depende de revisão humana explícita.
 
+## Refino de acessibilidade e usabilidade (próxima etapa)
+
+O formulário **Novo pedido** agora é reconhecido como diálogo modal com rótulo acessível, foco no campo Cliente ao abrir, `Tab`/ `Shift+Tab` restritos aos seus controles, encerramento por `Escape` e restauração do foco ao botão de origem quando possível. O menu indica `aria-current="page"` para a seção ativa e mostra orientação de rolagem horizontal em telas estreitas. Botões primários/secundários e itens de navegação usam altura mínima de 44 px no mobile.
+
+O teste `web/tests/pilot-accessibility.e2e.spec.ts` verifica teclado, foco, `Escape`, identificação semântica, estado do menu e altura dos controles a 390 px, sempre com lojista QA no PostgreSQL descartável.
+
+**Limites:** isto não constitui auditoria WCAG completa, avaliação de leitores de tela, contraste colorimétrico nem aceitação humana. Navegação por teclado e touch targets não substituem testes em dispositivos físicos.
+
 ## O que NÃO foi implementado
 
 - Não há notificações externas reais. Arquivo JSONL local é somente uma prova do mecanismo de emissão, **não** de entrega a alguém.
