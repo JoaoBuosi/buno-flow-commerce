@@ -75,3 +75,10 @@
 @media(max-width:1000px){
   .navHint{display:block;flex:1 1 100%;width:100%;font-size:11px;color:#a9b5cb;margin-top:-8px;padding:0 2px 3px}
 }
+
+/* 0.5.11 pilot UX: reachable controls and visible focus on touch-sized viewports. */
+.dialog:focus{outline:none}
+@media(max-width:660px){
+  button.primary,button.secondary,button.danger,.layout nav button{min-height:44px}
+  .dialog{overscroll-behavior:contain}
+}
