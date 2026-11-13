@@ -17,7 +17,30 @@ import re
 import subprocess
 import sys
 
-TABLES = ("stores", "users", "memberships", "orders", "order_items", "order_events", "order_imports", "user_sessions", "password_resets")
+# These critical structures must exist, but ALL source tables are discovered and
+# compared so new migrations cannot silently escape restore verification.
+REQUIRED_TABLES = frozenset((
+    "stores", "users", "memberships", "orders", "order_items", "order_events",
+    "order_imports", "user_sessions", "password_resets",
+    "auth_ip_rate_limits", "owner_mfa", "owner_mfa_challenges",
+    "owner_mfa_recovery_codes",
+))
+IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*\Z")
+LIST_TABLES_SQL = """
+SELECT tablename FROM pg_catalog.pg_tables
+WHERE schemaname = 'flow_commerce' ORDER BY tablename
+"""
+
+def parse_table_names(raw: str) -> tuple[str, ...]:
+    """Validate source/destination catalog identifiers, never interpolate untrusted SQL."""
+    names = tuple(name.strip() for name in raw.splitlines())
+    if (not names or len(names) != len(set(names)) or
+            any(not IDENTIFIER.fullmatch(name) for name in names)):
+        raise RuntimeError("Catálogo de tabelas vazio, malformado ou com nomes não seguros")
+    if not REQUIRED_TABLES.issubset(names):
+        raise RuntimeError("Tabelas obrigatórias de pedidos, acesso ou MFA ausentes do backup")
+    return names
+
 TARGET_RE = re.compile(r"^flow_restore_[a-z0-9_]{1,48}$")
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 
@@ -28,6 +51,16 @@ def validate_target(host: str, database: str) -> None:
     if not TARGET_RE.fullmatch(database):
         raise ValueError("Banco de destino deve começar com flow_restore_ e conter somente letras minúsculas/números/_.")
 
+
+def validate_source(source: dict[str, str]) -> None:
+    host = source.get("PGHOST", "")
+    if not host or host in LOOPBACK or host in ("0.0.0.0", "::"):
+        raise ValueError("Origem de exportação deve ser remota e explicitamente aprovada.")
+    if source.get("PGSSLMODE") not in ("require", "verify-ca", "verify-full"):
+        raise ValueError("Origem exige TLS com PGSSLMODE=require/verify-ca/verify-full.")
+    user = source.get("PGUSER", "").lower()
+    if not user or user == "postgres" or user.startswith("postgres.") or user in ("supabase_admin", "service_role"):
+        raise ValueError("Origem deve usar uma role de exportação dedicada, nunca uma conta administrativa.")
 
 def validate_output(path: Path, workdir: Path) -> None:
     target = path.expanduser().resolve()
@@ -45,7 +78,7 @@ def pg_env(prefix: str, default_ssl: str) -> dict[str, str]:
     # libpq can route to an entirely different remote server via PGHOSTADDR
     # even when PGHOST is localhost. Drop ambient overrides before building
     # the explicitly approved source/destination connection.
-    for unsafe in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS",
+    for unsafe in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGPASSFILE", "PGOPTIONS",
                    "PGTARGETSESSIONATTRS", "PGREQUIREAUTH", "PGCHANNELBINDING"):
         env.pop(unsafe, None)
     for name in ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"):
@@ -55,10 +88,14 @@ def pg_env(prefix: str, default_ssl: str) -> dict[str, str]:
         if value:
             env[name] = value
         elif name == "PGPASSWORD":
-            # PGPASSFILE or libpq service can supply password without shell history.
+            # No ambient password fallback is allowed; authorized operators must provide scoped credentials securely.
             env.pop(name, None)
     env["PGSSLMODE"] = os.getenv(prefix + "PGSSLMODE", default_ssl)
     env["PGCONNECT_TIMEOUT"] = "12"
+    if prefix == "FLOW_BACKUP_SOURCE_":
+        # Force source sessions read-only independently of their login defaults.
+        # The authorization query below also rejects roles with write privileges.
+        env["PGOPTIONS"] = "-c default_transaction_read_only=on"
     return env
 
 
@@ -79,6 +116,7 @@ def query(sql: str, env: dict[str, str]) -> str:
 
 def verify(output: Path, source: dict[str, str], destination: dict[str, str]) -> None:
     validate_target(destination["PGHOST"], destination["PGDATABASE"])
+    validate_source(source)
     if (source["PGHOST"] == destination["PGHOST"] and
         source["PGPORT"] == destination["PGPORT"] and
         source["PGDATABASE"] == destination["PGDATABASE"]):
@@ -89,6 +127,48 @@ def verify(output: Path, source: dict[str, str], destination: dict[str, str]) ->
     """, destination)
     if ready != "0":
         raise ValueError("O banco de destino contém tabelas; ABORTADO antes da restauração.")
+
+    # Refuse privileged source roles, including table owners and inherited write
+    # privileges. The operator must create an approved export-only role.
+    readonly = query("""
+      SELECT CASE WHEN
+        NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles
+                    WHERE rolname = current_user
+                      AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls))
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_catalog.pg_auth_members am
+          JOIN pg_catalog.pg_roles r ON r.oid=am.member
+          WHERE r.rolname = current_user
+        )
+        AND session_user = current_user
+        AND NOT has_schema_privilege(current_user, 'flow_commerce', 'CREATE')
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_catalog.pg_tables
+           WHERE schemaname = 'flow_commerce'
+             AND has_table_privilege(current_user,
+                  quote_ident(schemaname)||'.'||quote_ident(tablename),
+                  'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_catalog.pg_tables
+           WHERE schemaname = 'flow_commerce'
+             AND has_any_column_privilege(current_user,
+                  quote_ident(schemaname)||'.'||quote_ident(tablename),
+                  'INSERT,UPDATE,REFERENCES')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_catalog.pg_sequences
+           WHERE schemaname = 'flow_commerce'
+             AND has_sequence_privilege(current_user,
+                  quote_ident(schemaname)||'.'||quote_ident(sequencename),
+                  'USAGE,UPDATE')
+        )
+      THEN 'readonly' ELSE 'privileged' END
+    """, source)
+    if readonly != "readonly":
+        raise ValueError("Role de exportação tem privilégios de escrita/administração; ABORTADO antes do dump.")
+
+    source_tables = parse_table_names(query(LIST_TABLES_SQL, source))
 
     # File is created exclusively with private permissions and is never replaced.
     fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -101,12 +181,19 @@ def verify(output: Path, source: dict[str, str], destination: dict[str, str]) ->
         run(["pg_restore", "--exit-on-error", "--single-transaction",
              "--no-owner", "--no-acl", "--dbname", destination["PGDATABASE"],
              str(output)], destination, timeout=900)
-        for table in TABLES:
-            origin_count = query("SELECT count(*) FROM flow_commerce." + table, source)
-            target_count = query("SELECT count(*) FROM flow_commerce." + table, destination)
+        target_tables = parse_table_names(query(LIST_TABLES_SQL, destination))
+        if source_tables != target_tables:
+            raise RuntimeError("Conjunto de tabelas da restauração difere da origem")
+        for table in source_tables:
+            # Identifiers are verified against IDENTIFIER by parse_table_names,
+            # preventing SQL injection via unexpected catalog identifiers.
+            sql = "SELECT count(*) FROM flow_commerce." + table
+            origin_count = query(sql, source)
+            target_count = query(sql, destination)
             if not origin_count.isdigit() or origin_count != target_count:
                 raise RuntimeError("Contagem divergente na tabela " + table)
-            print(table + ": " + target_count + " registros — conferido")
+        # Table names and business record counts need not appear in operational logs.
+        print("Conferido o conjunto completo de tabelas e suas contagens; sem dados de clientes nos logs.")
         bad_foreign_keys = query("""
           SELECT
             (SELECT count(*) FROM flow_commerce.orders o LEFT JOIN flow_commerce.stores s
