@@ -17,7 +17,30 @@ import re
 import subprocess
 import sys
 
-TABLES = ("stores", "users", "memberships", "orders", "order_items", "order_events", "order_imports", "user_sessions", "password_resets")
+# These critical structures must exist, but ALL source tables are discovered and
+# compared so new migrations cannot silently escape restore verification.
+REQUIRED_TABLES = frozenset((
+    "stores", "users", "memberships", "orders", "order_items", "order_events",
+    "order_imports", "user_sessions", "password_resets",
+    "auth_ip_rate_limits", "owner_mfa", "owner_mfa_challenges",
+    "owner_mfa_recovery_codes",
+))
+IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*\\Z")
+LIST_TABLES_SQL = """
+SELECT tablename FROM pg_catalog.pg_tables
+WHERE schemaname = 'flow_commerce' ORDER BY tablename
+"""
+
+def parse_table_names(raw: str) -> tuple[str, ...]:
+    """Validate source/destination catalog identifiers, never interpolate untrusted SQL."""
+    names = tuple(name.strip() for name in raw.splitlines())
+    if (not names or len(names) != len(set(names)) or
+            any(not IDENTIFIER.fullmatch(name) for name in names)):
+        raise RuntimeError("Catálogo de tabelas vazio, malformado ou com nomes não seguros")
+    if not REQUIRED_TABLES.issubset(names):
+        raise RuntimeError("Tabelas obrigatórias de pedidos, acesso ou MFA ausentes do backup")
+    return names
+
 TARGET_RE = re.compile(r"^flow_restore_[a-z0-9_]{1,48}$")
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 
@@ -125,6 +148,8 @@ def verify(output: Path, source: dict[str, str], destination: dict[str, str]) ->
     if readonly != "readonly":
         raise ValueError("Role de exportação tem privilégios de escrita/administração; ABORTADO antes do dump.")
 
+    source_tables = parse_table_names(query(LIST_TABLES_SQL, source))
+
     # File is created exclusively with private permissions and is never replaced.
     fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     os.close(fd)
@@ -136,12 +161,19 @@ def verify(output: Path, source: dict[str, str], destination: dict[str, str]) ->
         run(["pg_restore", "--exit-on-error", "--single-transaction",
              "--no-owner", "--no-acl", "--dbname", destination["PGDATABASE"],
              str(output)], destination, timeout=900)
-        for table in TABLES:
-            origin_count = query("SELECT count(*) FROM flow_commerce." + table, source)
-            target_count = query("SELECT count(*) FROM flow_commerce." + table, destination)
+        target_tables = parse_table_names(query(LIST_TABLES_SQL, destination))
+        if source_tables != target_tables:
+            raise RuntimeError("Conjunto de tabelas da restauração difere da origem")
+        for table in source_tables:
+            # Identifiers are verified against IDENTIFIER by parse_table_names,
+            # preventing SQL injection via unexpected catalog identifiers.
+            sql = "SELECT count(*) FROM flow_commerce." + table
+            origin_count = query(sql, source)
+            target_count = query(sql, destination)
             if not origin_count.isdigit() or origin_count != target_count:
                 raise RuntimeError("Contagem divergente na tabela " + table)
-            print(table + ": " + target_count + " registros — conferido")
+        # Table names and business record counts need not appear in operational logs.
+        print("Conferido o conjunto completo de tabelas e suas contagens; sem dados de clientes nos logs.")
         bad_foreign_keys = query("""
           SELECT
             (SELECT count(*) FROM flow_commerce.orders o LEFT JOIN flow_commerce.stores s
