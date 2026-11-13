@@ -11,7 +11,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 function Block([string] $Reason) {
-    Write-Error "BLOCKED: $Reason"
+    [Console]::Error.WriteLine("BLOCKED: $Reason")
     exit 2
 }
 try {
