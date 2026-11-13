@@ -78,7 +78,7 @@ def pg_env(prefix: str, default_ssl: str) -> dict[str, str]:
     # libpq can route to an entirely different remote server via PGHOSTADDR
     # even when PGHOST is localhost. Drop ambient overrides before building
     # the explicitly approved source/destination connection.
-    for unsafe in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS",
+    for unsafe in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGPASSFILE", "PGOPTIONS",
                    "PGTARGETSESSIONATTRS", "PGREQUIREAUTH", "PGCHANNELBINDING"):
         env.pop(unsafe, None)
     for name in ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"):
@@ -88,7 +88,7 @@ def pg_env(prefix: str, default_ssl: str) -> dict[str, str]:
         if value:
             env[name] = value
         elif name == "PGPASSWORD":
-            # PGPASSFILE or libpq service can supply password without shell history.
+            # No ambient password fallback is allowed; authorized operators must provide scoped credentials securely.
             env.pop(name, None)
     env["PGSSLMODE"] = os.getenv(prefix + "PGSSLMODE", default_ssl)
     env["PGCONNECT_TIMEOUT"] = "12"
@@ -135,6 +135,7 @@ def verify(output: Path, source: dict[str, str], destination: dict[str, str]) ->
         NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles
                     WHERE rolname = current_user
                       AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication))
+        AND session_user = current_user
         AND NOT has_schema_privilege(current_user, 'flow_commerce', 'CREATE')
         AND NOT EXISTS (
           SELECT 1 FROM pg_catalog.pg_tables
@@ -142,6 +143,13 @@ def verify(output: Path, source: dict[str, str], destination: dict[str, str]) ->
              AND has_table_privilege(current_user,
                   quote_ident(schemaname)||'.'||quote_ident(tablename),
                   'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_catalog.pg_tables
+           WHERE schemaname = 'flow_commerce'
+             AND has_any_column_privilege(current_user,
+                  quote_ident(schemaname)||'.'||quote_ident(tablename),
+                  'INSERT,UPDATE,REFERENCES')
         )
       THEN 'readonly' ELSE 'privileged' END
     """, source)
