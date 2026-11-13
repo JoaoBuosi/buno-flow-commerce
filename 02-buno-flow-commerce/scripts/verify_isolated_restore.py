@@ -151,6 +151,13 @@ def verify(output: Path, source: dict[str, str], destination: dict[str, str]) ->
                   quote_ident(schemaname)||'.'||quote_ident(tablename),
                   'INSERT,UPDATE,REFERENCES')
         )
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_catalog.pg_sequences
+           WHERE schemaname = 'flow_commerce'
+             AND has_sequence_privilege(current_user,
+                  quote_ident(schemaname)||'.'||quote_ident(sequencename),
+                  'USAGE,UPDATE')
+        )
       THEN 'readonly' ELSE 'privileged' END
     """, source)
     if readonly != "readonly":
