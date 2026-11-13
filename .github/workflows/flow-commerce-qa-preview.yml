@@ -1,0 +1,37 @@
+name: Flow Commerce 0.5.11 - synthetic mobile preview smoke
+on:
+  push:
+    branches: ['qa/flow-commerce-0511-mobile-synthetic-preview']
+    paths:
+      - '02-buno-flow-commerce/web/**'
+      - '.github/workflows/flow-commerce-qa-preview.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-browser-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CI: 'true'
+      VITE_QA_PREVIEW: synthetic
+    defaults:
+      run:
+        working-directory: 02-buno-flow-commerce/web
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: 02-buno-flow-commerce/web/package-lock.json
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck and production bundle
+        run: npm run build
+      - name: Verify Google Chrome availability
+        run: google-chrome --version
+      - name: Validate simulated mobile order flow and network blocking
+        run: npm run test:e2e -- qa-synthetic-preview.e2e.spec.ts
