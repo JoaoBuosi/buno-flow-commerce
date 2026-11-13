@@ -17,6 +17,22 @@
 - [ ] Nenhum deploy, merge ou ativação de envio real de e-mails.
 - [ ] Revisão manual da política de uso do sistema, permissões do cadastro/lojista, acesso direto à API, isolamento entre lojas e resposta em dispositivos móveis.
 
+## Pré-homologação de backup real — sem conexão (nova etapa)
+
+Foi adicionado `scripts/real_restore_preflight.py`, com testes em `scripts/test_real_restore_preflight.py`. O preflight consulta **somente caminhos e variáveis locais**, sem receber a senha, conectar ao Supabase, emitir SQL ou gerar arquivos de backup.
+
+Em uma estação Windows autorizada, antes de qualquer operação real, configurar variáveis não secretas de origem/destino do ensaio e executar:
+
+```powershell
+py -3 scripts/real_restore_preflight.py --output "X:\\FlowBackupsPrivados\\novo-backup.dump"
+```
+
+Os parâmetros do operador devem especificar `FLOW_BACKUP_SOURCE_PGHOST`, `FLOW_BACKUP_SOURCE_PGPORT`, `FLOW_BACKUP_SOURCE_PGUSER`, `FLOW_BACKUP_SOURCE_PGSSLMODE=require`, `FLOW_RESTORE_PGHOST=127.0.0.1`, `FLOW_RESTORE_PGPORT`, `FLOW_RESTORE_PGDATABASE=flow_restore_qa` e `FLOW_RESTORE_PGSSLMODE=disable`. Nenhuma senha é necessária para este preflight.
+
+O script rejeita caminhos dentro do repositório, arquivos preexistentes, destino remoto, banco fora do padrão, porta fora da faixa, transporte sem TLS na origem e variáveis libpq globais que poderiam redirecionar a conexão. **Passar não comprova** que o caminho é criptografado, que a porta local não é um túnel ou que a conta de origem tem permissão apenas de leitura. Estas verificações exigem revisão manual.
+
+A operação real permanece bloqueada até ambiente local seguro, backups com retenção definida, autorização do responsável e revisão da role. O workflow de CI roda somente os testes unitários do preflight; não exporta dados.
+
 ## Pendências que o CI não resolve
 
 - Registro e verificação de domínio **adiados por decisão do projeto**. O envio real e a recuperação real por e-mail continuam bloqueados até a configuração de remetente autorizado ou alternativa previamente aprovada.
