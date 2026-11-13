@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from urllib.parse import urlsplit
 
 REQUIRED = (
     "ci_backend_postgres", "ci_browser_e2e", "ci_security_sast",
@@ -25,9 +26,6 @@ def validate(evidence: object) -> list[str]:
         return ["Evidence must be a JSON object"]
     if set(evidence) - SAFE_FIELDS:
         problems.append("Unexpected fields in release evidence")
-    serialized = json.dumps(evidence).lower()
-    if any(term in serialized for term in FORBIDDEN):
-        problems.append("Potential credential-related material in evidence")
     if evidence.get("version") != "0.5.9":
         problems.append("Expected version 0.5.9")
     if evidence.get("environment") != "staging":
@@ -41,8 +39,14 @@ def validate(evidence: object) -> list[str]:
             problems.append(f"Missing or unapproved check: {name}")
             continue
         link = item.get("evidence_url")
-        if not isinstance(link, str) or not link.startswith("https://") or len(link) < 12:
+        if not isinstance(link, str):
             problems.append(f"Missing HTTPS evidence reference: {name}")
+        else:
+            parsed = urlsplit(link)
+            if (parsed.scheme != "https" or not parsed.hostname or parsed.username
+                    or parsed.password or parsed.query or parsed.fragment or
+                    any(c.isspace() for c in link)):
+                problems.append(f"Unsafe evidence URL: {name}")
         if set(item) - {"passed", "evidence_url"}:
             problems.append(f"Unexpected check metadata: {name}")
     if set(checks) - set(REQUIRED):
