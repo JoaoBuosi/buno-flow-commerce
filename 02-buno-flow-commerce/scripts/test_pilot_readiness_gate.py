@@ -62,6 +62,16 @@ class PilotReadinessGateTests(unittest.TestCase):
         data["checks"]["ci_zap_authenticated"]["evidence_url"] = "http://localhost/report"
         self.assertTrue(gate.validate(data))
 
+    def test_embedded_url_credential_blocks(self):
+        data = valid()
+        data["checks"]["ci_zap_authenticated"]["evidence_url"] = "https://user:password@example.com/report"
+        self.assertTrue(gate.validate(data))
+
+    def test_evidence_url_query_token_blocks(self):
+        data = valid()
+        data["checks"]["ci_zap_authenticated"]["evidence_url"] = "https://example.com/report?token=secret"
+        self.assertTrue(gate.validate(data))
+
     def test_incomplete_mfa_recovery_blocks(self):
         data = valid()
         data["checks"]["mfa_totp_and_recovery"]["passed"] = False
