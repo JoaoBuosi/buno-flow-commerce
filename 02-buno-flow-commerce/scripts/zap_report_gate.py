@@ -15,7 +15,7 @@ import sys
 
 SEVERITY = {0: "Informational", 1: "Low", 2: "Medium", 3: "High"}
 
-def check_report(filename: Path) -> dict:
+def check_report(filename: Path, *, expected_port: str = "5173") -> dict:
     if not filename.is_file() or filename.stat().st_size < 20:
         raise ValueError("ZAP report is absent or empty")
     document = json.loads(filename.read_text(encoding="utf-8"))
@@ -30,7 +30,7 @@ def check_report(filename: Path) -> dict:
     for site in sites:
         host = site.get("@host", "")
         port = str(site.get("@port", ""))
-        if host not in ("127.0.0.1", "localhost") or port != "5173":
+        if host not in ("127.0.0.1", "localhost") or port != expected_port:
             raise ValueError("ZAP report contains an unapproved, non-loopback target")
         alerts = site.get("alerts", [])
         if not isinstance(alerts, list):
@@ -51,7 +51,7 @@ def check_report(filename: Path) -> dict:
             })
     return {"sites": len(sites), "counts": total, "findings": findings}
 
-def summarize(paths: list[Path]) -> int:
+def summarize(paths: list[Path], *, expected_port: str = "5173") -> int:
     lines = ["## Buno Flow Commerce — OWASP ZAP (passive, isolated)",
              "",
              "Scanned only a disposable localhost application backed by a fake PostgreSQL database.",
@@ -59,7 +59,7 @@ def summarize(paths: list[Path]) -> int:
              ""]
     failed = False
     for path in paths:
-        result = check_report(path)
+        result = check_report(path, expected_port=expected_port)
         counts = result["counts"]
         high = counts["High"]
         lines.extend([
@@ -100,10 +100,11 @@ def summarize(paths: list[Path]) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--port", choices=("5173", "8080"), default="5173")
     parser.add_argument("reports", nargs="+", type=Path)
     args = parser.parse_args()
     try:
-        sys.exit(summarize(args.reports))
+        sys.exit(summarize(args.reports, expected_port=args.port))
     except (ValueError, OSError, json.JSONDecodeError) as e:
         # Do not expose report contents or request bodies.
         print(f"::error::Cannot validate ZAP report: {type(e).__name__}: {e}", file=sys.stderr)

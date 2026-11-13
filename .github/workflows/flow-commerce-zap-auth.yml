@@ -1,0 +1,146 @@
+name: Flow Commerce - ZAP authenticated DAST (disposable tenant and MFA)
+on:
+  push:
+    branches: [feat/flow-commerce-0.5.8-csp-authenticated-dast]
+    paths:
+      - '02-buno-flow-commerce/**'
+      - '.github/workflows/flow-commerce-zap-auth.yml'
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/**'
+      - '.github/workflows/flow-commerce-zap-auth.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: flow-commerce-auth-zap-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  authenticated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: commerce_auth_dast
+          POSTGRES_USER: zap_auth_only
+          POSTGRES_PASSWORD: disposable-ci-database
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U zap_auth_only -d commerce_auth_dast"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      CI: 'true'
+      DAST_AUTH_LOCAL_ONLY: explicit-disposable-only
+      SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/commerce_auth_dast?currentSchema=flow_commerce
+      SPRING_DATASOURCE_USERNAME: zap_auth_only
+      SPRING_DATASOURCE_PASSWORD: disposable-ci-database
+      COMMERCE_OWNER_MFA_REQUIRED: 'false'
+      COMMERCE_OWNER_MFA_SELF_ENROLLMENT_ENABLED: 'true'
+      COMMERCE_OWNER_MFA_PILOT_EMAIL: ''
+      COMMERCE_IP_RATE_LIMIT_ENABLED: 'false'
+      COMMERCE_EDGE_REQUIRED: 'false'
+      COMMERCE_PILOT_ONLY: 'false'
+      COMMERCE_MAIL_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: 02-buno-flow-commerce/pom.xml
+      - name: Test report validation and scope policy
+        working-directory: 02-buno-flow-commerce
+        run: python3 -m unittest discover -s scripts -p 'test_zap_report_gate.py' -v
+      - name: Build API using actual source and migrations
+        working-directory: 02-buno-flow-commerce
+        run: mvn -B -DskipTests package
+      - name: Start API with ephemeral AES key and disposable database
+        working-directory: 02-buno-flow-commerce
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="$(openssl rand -base64 32)"
+          COMMERCE_MFA_ENCRYPTION_KEY="$key" \
+            nohup java -jar target/buno-flow-commerce-0.2.0-SNAPSHOT.jar \
+            > "$RUNNER_TEMP/flow-auth-zap-api.log" 2>&1 &
+          unset key
+          for i in $(seq 1 70); do
+            if curl --noproxy '*' -fsS --max-time 3 http://127.0.0.1:8080/actuator/health | grep -q UP; then
+              echo 'Disposable Spring Boot PostgreSQL and MFA ready'
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::Isolated backend did not start'
+          exit 1
+      - name: Start OWASP ZAP proxy daemon on loopback only
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/zaproxy/zaproxy:stable
+          docker run -d --name flow-auth-zap --network host --memory=4g \
+            -e JAVA_OPTS='-Xmx2g' \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap.sh -daemon -host 127.0.0.1 -port 8090 \
+            -config api.disablekey=true \
+            -config api.addrs.addr.name=127.0.0.1 \
+            -config api.addrs.addr.regex=false >/dev/null
+          for i in $(seq 1 75); do
+            if curl --noproxy '*' -fsS --max-time 3 \
+              http://127.0.0.1:8090/JSON/core/view/version/ >/dev/null; then
+              echo 'ZAP proxy ready on 127.0.0.1:8090'
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::ZAP proxy did not start on loopback'
+          exit 1
+      - name: Replay authenticated access-control and MFA flows THROUGH ZAP
+        working-directory: 02-buno-flow-commerce
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p zap-artifacts
+          python3 scripts/zap_authenticated_qa.py
+      - name: Check sanitized ZAP passive alerts (HIGH blocks)
+        working-directory: 02-buno-flow-commerce
+        run: python3 scripts/zap_report_gate.py --port 8080 zap-artifacts/authenticated-zap.json
+      - name: Assert no sensitive values in published evidence
+        working-directory: 02-buno-flow-commerce
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          paths = [Path("zap-artifacts/authenticated-zap.json"),
+                   Path("zap-artifacts/authenticated-assertions.json")]
+          for p in paths:
+              assert p.is_file() and p.stat().st_size > 30, "Missing sanitized evidence"
+              parsed=json.loads(p.read_text(encoding="utf-8"))
+              assert parsed
+              s=p.read_text(encoding="utf-8")
+              for dangerous in ('"accessToken"', '"secret"', '"challengeToken"',
+                                '"password"', '"Authorization"', '"recoveryCodes"',
+                                '"email"', '"otpauthUri"', '"cookie"'):
+                  assert dangerous not in s, "Sensitive field unexpectedly present"
+          print("PASS: only anonymized rules, statuses and labels are stored")
+          PY
+      - name: Upload sanitized evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-commerce-zap-auth-${{ github.run_id }}
+          path: |
+            02-buno-flow-commerce/zap-artifacts/authenticated-zap.json
+            02-buno-flow-commerce/zap-artifacts/authenticated-assertions.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove ephemeral ZAP proxy
+        if: always()
+        run: docker rm -f flow-auth-zap >/dev/null 2>&1 || true
