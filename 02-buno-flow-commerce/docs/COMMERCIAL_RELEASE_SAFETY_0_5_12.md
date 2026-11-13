@@ -60,6 +60,8 @@ O script existente `verify_isolated_restore.py` foi reforçado para:
 
 Novos testes em `test_verify_isolated_restore.py` comprovam rejeição de origem insegura e ausência de `pg_dump` na tentativa bloqueada. A revisão manual da role, ausência de túnel e criptografia do armazenamento ainda é indispensável. A configuração de produção não foi alterada.
 
+O workflow de integração preserva seu teste real **sintético** de `pg_dump`/`pg_restore` em PostgreSQL temporário e, separadamente, verifica que o helper de backup **real** não aceita uma origem local privilegiada nem chega a criar arquivo. Assim a segurança adicional não é contornada por uma opção especial de CI.
+
 ## Testes automáticos
 
 - `CommercialStartupGuardTest`: 11 cenários, incluindo configuração incompleta, modo produção reconhecido automaticamente, password local, TLS incorreto, autenticação multifator, e-mail e CORS.
