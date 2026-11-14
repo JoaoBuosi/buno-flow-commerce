@@ -7,7 +7,7 @@
 - Supabase: projeto buno-flow-commerce, referência pqdwxihinbmeiorkqdtq.
 - PostgreSQL 17.11; 13 tabelas no schema privado flow_commerce.
 - Tabelas: auth_ip_rate_limits, memberships, order_events, order_imports, order_items, orders, owner_mfa, owner_mfa_challenges, owner_mfa_recovery_codes, password_resets, stores, user_sessions, users.
-- Nenhuma role com nome iniciando em flow_backup_ foi encontrada. Isso não exclui a possibilidade de uma conta de exportação com outro nome — verificar antes de criar qualquer papel.
+- A role flow_backup_export já foi criada e auditada: NOLOGIN, sem senha provisionada, com SELECT nas 13 tabelas e sem escrita, BYPASSRLS ou privilégios administrativos. **Não executar novamente CREATE ROLE.**
 - O catálogo mostrou RLS desativada nessas 13 tabelas privadas. Confirmar que flow_commerce não está exposto diretamente na Data API e que a API Spring aplica separação entre lojas.
 - O Security Advisor apontou três avisos informativos de RLS habilitada sem policy em public.orders, public.workflow_requests e public.workflow_audit_events. Investigar separadamente sem confundir public.orders com flow_commerce.orders ou ampliar acesso.
 
@@ -20,9 +20,9 @@
 - [ ] Origem Supabase do projeto correto, conexão TLS com verificação apropriada e permissões mínimas; não usar postgres, supabase_admin ou service_role.
 - [ ] Responsável autorizar janela, política de descarte e local de evidência sanitizada. Dados de contas e MFA são sensíveis.
 
-## Proposta de criação da role, NÃO executar sem aprovação de mudança no Supabase
+## Registro histórico da role — NÃO executar CREATE ROLE novamente
 
-O SQL abaixo é um modelo para revisão por responsável autorizado. Não o apliquei.
+O SQL abaixo é apenas um exemplo histórico do provisionamento planejado. A conta já existe no Supabase e a etapa de criação foi executada anteriormente. **Não reexecutar.** Não reabrir a conta para login antes de provisionar a senha em um cofre e obter autorização específica.
 
 ~~~sql
 -- Conta sem senha até provisionamento seguro por administrador autorizado.
@@ -33,17 +33,65 @@ GRANT SELECT ON ALL TABLES IN SCHEMA flow_commerce TO flow_backup_export;
 GRANT SELECT ON ALL SEQUENCES IN SCHEMA flow_commerce TO flow_backup_export;
 ~~~
 
-Use uma role existente, se houver uma aprovada e equivalente, em vez de criar outra. Não conceder INSERT/UPDATE/DELETE, superuser, BYPASSRLS, CREATE, USAGE/UPDATE em sequences (permitem avançar ou alterar sequência), acesso público ou permissões de outros schemas. Reavaliar grants após migrações; revogar credenciais temporárias ao final. O helper verifica privilégios reais e aborta antes de criar dump se houver escrita/administração, BYPASSRLS ou participação em outras roles. A role é proposta inicialmente com **NOLOGIN**: mesmo que seja criada, não poderá autenticar. Após o responsável registrar uma senha forte em cofre independente e verificar as permissões, a ativação de LOGIN e a configuração da senha exigem operação supervisionada e autorização específica; nunca informar a senha pelo chat ou por script versionado.
+Use uma role existente, se houver uma aprovada e equivalente, em vez de criar outra. Não conceder INSERT/UPDATE/DELETE, superuser, BYPASSRLS, CREATE, USAGE/UPDATE em sequences (permitem avançar ou alterar sequência), acesso público ou permissões de outros schemas. Reavaliar grants após migrações; revogar credenciais temporárias ao final. O helper verifica privilégios reais e aborta antes de criar dump se houver escrita/administração, BYPASSRLS ou participação em outras roles. A role foi criada com **NOLOGIN**: mesmo que seja criada, não poderá autenticar. Após o responsável registrar uma senha forte em cofre independente e verificar as permissões, a ativação de LOGIN e a configuração da senha exigem operação supervisionada e autorização específica; nunca informar a senha pelo chat ou por script versionado.
 
 ### Verificação da role após aprovação (somente metadados)
 
-A role exata `flow_backup_export` não existia na consulta de catálogo mais recente. Quando houver autorização para criá-la, o responsável deverá confirmar em consulta de leitura que:
+A role exata `flow_backup_export` está presente no PostgreSQL e sua configuração NOLOGIN foi verificada. Quando houver autorização para criá-la, o responsável deverá confirmar em consulta de leitura que:
 - Durante o provisionamento inicial, `rolcanlogin=false`; somente após a etapa supervisionada de senha e ativação, confirmar `rolcanlogin=true`. Em ambas, `rolsuper=false`, `rolcreaterole=false`, `rolcreatedb=false`, `rolreplication=false`, `rolbypassrls=false`;
 - não há associações de role em `pg_auth_members`;
 - não existem privilégios de escrita em tabelas, colunas ou sequências; somente leitura de `flow_commerce`;
 - o acesso com credencial do cofre funciona por TLS e as consultas de leitura são permitidas, mas INSERT/UPDATE/DELETE/nextval não são.
 
 Nunca registrar segredo em PR, SQL, saída de log ou chat. Permissões mínimas não substituem confirmação de que o schema está privado e o destino é realmente isolado.
+
+## Executar em Windows com BitLocker — caminho supervisionado (0.5.13)
+
+O roteiro acima continua válido; há agora um executor que adiciona checagem de ACL da pasta,
+solicita credenciais sem imprimi-las e registra SHA-256 depois de concluir dump e restauração.
+**Não foi executado na máquina do proprietário.**
+
+Antes de executar, o administrador deverá **ativar o login da role somente após**
+provisionar sua senha diretamente no cofre independente, por método que não exponha o
+segredo em chat, arquivo versionado ou histórico. A role foi criada com NOLOGIN e segue assim.
+Não reutilizar a conta administrativa do Supabase.
+
+1. No Windows autorizado, selecione uma pasta exclusiva em volume BitLocker totalmente
+   criptografado, com ACL sem acesso a Everyone, Users, Authenticated Users ou Guests.
+   Confira a cópia offline da chave de recuperação BitLocker em local independente.
+2. Instale PostgreSQL **17** local (psql, pg_dump e pg_restore) e Python 3 (com py.exe).
+   Crie manualmente uma base **vazia** cujo nome inicie com flow_restore_, apenas em
+   127.0.0.1, sem túnel ou proxy remoto.
+3. Configure as variáveis FLOW_BACKUP_SOURCE_PGHOST, PGPORT, PGDATABASE,
+   PGUSER=flow_backup_export (ou o formato de pooler específico aprovado),
+   PGSSLMODE=verify-full, e FLOW_RESTORE_PGHOST=127.0.0.1, PGPORT,
+   PGDATABASE=flow_restore_*, PGUSER, PGSSLMODE=disable. **Não configure**
+   FLOW_BACKUP_SOURCE_PGPASSWORD nem FLOW_RESTORE_PGPASSWORD previamente:
+   o executor solicitará as senhas diretamente, lidas do seu cofre.
+4. Faça o pré-check sem backup:
+
+~~~powershell
+Set-Location "<repositorio>\02-buno-flow-commerce"
+.\scripts\run_windows_encrypted_backup.ps1 -OutputDirectory "X:\FlowBackupsPrivados"
+~~~
+
+5. Depois de confirmar manualmente origem, rede, BitLocker, permissões, base de
+   restauração realmente vazia e a role habilitada, execute:
+
+~~~powershell
+.\scripts\run_windows_encrypted_backup.ps1 -OutputDirectory "X:\FlowBackupsPrivados" -Execute
+~~~
+
+O comando 5 pergunta as senhas de origem e destino no console sem ecoar, exige
+a confirmação literal BACKUP-ISOLADO, cria arquivo de nome exclusivo, executa
+pg_dump e pg_restore com contas de escopo mínimo e grava um arquivo .sha256 no
+mesmo volume privado. A verificação de integridade complementar e o aceite humano
+continuam necessários. Não enviar o dump ao GitHub ou ao ChatGPT; enviar
+somente status e evidências **sanitizadas**.
+
+**Limite técnico:** o executor não consegue provar sozinho que 127.0.0.1
+não foi redirecionado por software de túnel/proxy e que a senha está guardada
+em cofre externo. Essas validações permanecem responsabilidade do operador.
 
 ## Etapa 1 — estação e preflight SEM conexão
 
