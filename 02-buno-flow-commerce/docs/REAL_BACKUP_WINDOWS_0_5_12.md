@@ -7,7 +7,7 @@
 - Supabase: projeto buno-flow-commerce, referência pqdwxihinbmeiorkqdtq.
 - PostgreSQL 17.11; 13 tabelas no schema privado flow_commerce.
 - Tabelas: auth_ip_rate_limits, memberships, order_events, order_imports, order_items, orders, owner_mfa, owner_mfa_challenges, owner_mfa_recovery_codes, password_resets, stores, user_sessions, users.
-- Nenhuma role com nome iniciando em flow_backup_ foi encontrada. Isso não exclui a possibilidade de uma conta de exportação com outro nome — verificar antes de criar qualquer papel.
+- A role flow_backup_export já foi criada e auditada: NOLOGIN, sem senha provisionada, com SELECT nas 13 tabelas e sem escrita, BYPASSRLS ou privilégios administrativos. **Não executar novamente CREATE ROLE.**
 - O catálogo mostrou RLS desativada nessas 13 tabelas privadas. Confirmar que flow_commerce não está exposto diretamente na Data API e que a API Spring aplica separação entre lojas.
 - O Security Advisor apontou três avisos informativos de RLS habilitada sem policy em public.orders, public.workflow_requests e public.workflow_audit_events. Investigar separadamente sem confundir public.orders com flow_commerce.orders ou ampliar acesso.
 
@@ -20,9 +20,9 @@
 - [ ] Origem Supabase do projeto correto, conexão TLS com verificação apropriada e permissões mínimas; não usar postgres, supabase_admin ou service_role.
 - [ ] Responsável autorizar janela, política de descarte e local de evidência sanitizada. Dados de contas e MFA são sensíveis.
 
-## Proposta de criação da role, NÃO executar sem aprovação de mudança no Supabase
+## Registro histórico da role — NÃO executar CREATE ROLE novamente
 
-O SQL abaixo é um modelo para revisão por responsável autorizado. Não o apliquei.
+O SQL abaixo é apenas um exemplo histórico do provisionamento planejado. A conta já existe no Supabase e a etapa de criação foi executada anteriormente. **Não reexecutar.** Não reabrir a conta para login antes de provisionar a senha em um cofre e obter autorização específica.
 
 ~~~sql
 -- Conta sem senha até provisionamento seguro por administrador autorizado.
@@ -33,11 +33,11 @@ GRANT SELECT ON ALL TABLES IN SCHEMA flow_commerce TO flow_backup_export;
 GRANT SELECT ON ALL SEQUENCES IN SCHEMA flow_commerce TO flow_backup_export;
 ~~~
 
-Use uma role existente, se houver uma aprovada e equivalente, em vez de criar outra. Não conceder INSERT/UPDATE/DELETE, superuser, BYPASSRLS, CREATE, USAGE/UPDATE em sequences (permitem avançar ou alterar sequência), acesso público ou permissões de outros schemas. Reavaliar grants após migrações; revogar credenciais temporárias ao final. O helper verifica privilégios reais e aborta antes de criar dump se houver escrita/administração, BYPASSRLS ou participação em outras roles. A role é proposta inicialmente com **NOLOGIN**: mesmo que seja criada, não poderá autenticar. Após o responsável registrar uma senha forte em cofre independente e verificar as permissões, a ativação de LOGIN e a configuração da senha exigem operação supervisionada e autorização específica; nunca informar a senha pelo chat ou por script versionado.
+Use uma role existente, se houver uma aprovada e equivalente, em vez de criar outra. Não conceder INSERT/UPDATE/DELETE, superuser, BYPASSRLS, CREATE, USAGE/UPDATE em sequences (permitem avançar ou alterar sequência), acesso público ou permissões de outros schemas. Reavaliar grants após migrações; revogar credenciais temporárias ao final. O helper verifica privilégios reais e aborta antes de criar dump se houver escrita/administração, BYPASSRLS ou participação em outras roles. A role foi criada com **NOLOGIN**: mesmo que seja criada, não poderá autenticar. Após o responsável registrar uma senha forte em cofre independente e verificar as permissões, a ativação de LOGIN e a configuração da senha exigem operação supervisionada e autorização específica; nunca informar a senha pelo chat ou por script versionado.
 
 ### Verificação da role após aprovação (somente metadados)
 
-A role exata `flow_backup_export` não existia na consulta de catálogo mais recente. Quando houver autorização para criá-la, o responsável deverá confirmar em consulta de leitura que:
+A role exata `flow_backup_export` está presente no PostgreSQL e sua configuração NOLOGIN foi verificada. Quando houver autorização para criá-la, o responsável deverá confirmar em consulta de leitura que:
 - Durante o provisionamento inicial, `rolcanlogin=false`; somente após a etapa supervisionada de senha e ativação, confirmar `rolcanlogin=true`. Em ambas, `rolsuper=false`, `rolcreaterole=false`, `rolcreatedb=false`, `rolreplication=false`, `rolbypassrls=false`;
 - não há associações de role em `pg_auth_members`;
 - não existem privilégios de escrita em tabelas, colunas ou sequências; somente leitura de `flow_commerce`;
