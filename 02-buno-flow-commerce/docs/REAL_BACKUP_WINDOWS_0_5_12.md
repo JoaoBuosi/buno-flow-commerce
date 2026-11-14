@@ -45,6 +45,54 @@ A role exata `flow_backup_export` está presente no PostgreSQL e sua configuraç
 
 Nunca registrar segredo em PR, SQL, saída de log ou chat. Permissões mínimas não substituem confirmação de que o schema está privado e o destino é realmente isolado.
 
+## Executar em Windows com BitLocker — caminho supervisionado (0.5.13)
+
+O roteiro acima continua válido; há agora um executor que adiciona checagem de ACL da pasta,
+solicita credenciais sem imprimi-las e registra SHA-256 depois de concluir dump e restauração.
+**Não foi executado na máquina do proprietário.**
+
+Antes de executar, o administrador deverá **ativar o login da role somente após**
+provisionar sua senha diretamente no cofre independente, por método que não exponha o
+segredo em chat, arquivo versionado ou histórico. A role foi criada com NOLOGIN e segue assim.
+Não reutilizar a conta administrativa do Supabase.
+
+1. No Windows autorizado, selecione uma pasta exclusiva em volume BitLocker totalmente
+   criptografado, com ACL sem acesso a Everyone, Users, Authenticated Users ou Guests.
+   Confira a cópia offline da chave de recuperação BitLocker em local independente.
+2. Instale PostgreSQL **17** local (psql, pg_dump e pg_restore) e Python 3 (com py.exe).
+   Crie manualmente uma base **vazia** cujo nome inicie com flow_restore_, apenas em
+   127.0.0.1, sem túnel ou proxy remoto.
+3. Configure as variáveis FLOW_BACKUP_SOURCE_PGHOST, PGPORT, PGDATABASE,
+   PGUSER=flow_backup_export (ou o formato de pooler específico aprovado),
+   PGSSLMODE=verify-full, e FLOW_RESTORE_PGHOST=127.0.0.1, PGPORT,
+   PGDATABASE=flow_restore_*, PGUSER, PGSSLMODE=disable. **Não configure**
+   FLOW_BACKUP_SOURCE_PGPASSWORD nem FLOW_RESTORE_PGPASSWORD previamente:
+   o executor solicitará as senhas diretamente, lidas do seu cofre.
+4. Faça o pré-check sem backup:
+
+~~~powershell
+Set-Location "<repositorio>\02-buno-flow-commerce"
+.\scripts\run_windows_encrypted_backup.ps1 -OutputDirectory "X:\FlowBackupsPrivados"
+~~~
+
+5. Depois de confirmar manualmente origem, rede, BitLocker, permissões, base de
+   restauração realmente vazia e a role habilitada, execute:
+
+~~~powershell
+.\scripts\run_windows_encrypted_backup.ps1 -OutputDirectory "X:\FlowBackupsPrivados" -Execute
+~~~
+
+O comando 5 pergunta as senhas de origem e destino no console sem ecoar, exige
+a confirmação literal BACKUP-ISOLADO, cria arquivo de nome exclusivo, executa
+pg_dump e pg_restore com contas de escopo mínimo e grava um arquivo .sha256 no
+mesmo volume privado. A verificação de integridade complementar e o aceite humano
+continuam necessários. Não enviar o dump ao GitHub ou ao ChatGPT; enviar
+somente status e evidências **sanitizadas**.
+
+**Limite técnico:** o executor não consegue provar sozinho que 127.0.0.1
+não foi redirecionado por software de túnel/proxy e que a senha está guardada
+em cofre externo. Essas validações permanecem responsabilidade do operador.
+
 ## Etapa 1 — estação e preflight SEM conexão
 
 Na estação Windows autorizada, configure a pasta no volume cifrado. Os caminhos são exemplos, não valores da sua máquina.
