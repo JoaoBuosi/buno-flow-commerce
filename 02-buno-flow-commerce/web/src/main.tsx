@@ -8,11 +8,17 @@ type Event={action:string;old_status:string|null;new_status:string|null;detail:s
 type Dashboard={order_count:number;active_count:number;delivered_count:number;canceled_count:number;order_value:number};
 type StoreProfile={id:string;name:string;created_at:string};
 type Forecast={sku:string;weekStart:string;status:string;predictedUnits:number|null;method:string;message:string;unitsLast8FullWeeks:number;activeWeeksLast8:number;modelLimitations?:string};
-// Live staging refuses to send credentials unless the Java API has a configured HTTPS endpoint.
+// 0.5.13: production credentials may ONLY go through the same-origin,
+// authenticated edge gateway. Never ship an arbitrary upstream URL in Vite's
+// public build; the Railway service origin/key live exclusively on the server.
 const configuredApi = String(import.meta.env.VITE_API_URL || "").trim();
-const sameOrigin = configuredApi === "same-origin" && !import.meta.env.DEV;
-const apiReady = import.meta.env.DEV || sameOrigin || /^https:\/\/[^\s]+\/api\/v1\/?$/.test(configuredApi);
-const base=(sameOrigin ? window.location.origin + "/api/v1" : (configuredApi || (import.meta.env.DEV ? "http://localhost:8102/api/v1" : ""))).replace(/\/$/,"");
+const sameOrigin = !import.meta.env.DEV && configuredApi === "same-origin";
+const devApi = import.meta.env.DEV
+  ? (configuredApi || "http://127.0.0.1:8102/api/v1")
+  : "";
+const validDevApi = import.meta.env.DEV && /^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d{2,5})?\/api\/v1\/?$/.test(devApi);
+const apiReady = sameOrigin || validDevApi;
+const base = sameOrigin ? window.location.origin + "/api/v1" : (validDevApi ? devApi.replace(/\/$/,"") : "");
 // Demo mode only provides synthetic files and shortcuts; never bypasses backend auth.
 const case26Mode = new URLSearchParams(window.location.search).get("case26") === "1";
 const money=(v:number)=>Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
