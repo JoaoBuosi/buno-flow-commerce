@@ -32,7 +32,7 @@ Backups gerenciados (quando o plano do Supabase os oferece) podem ser conferidos
 ## Aceite
 - [x] Integração do frontend para gateway da mesma origem e testes de contrato escritos.
 - [x] Workflow Java + PostgreSQL 17 real em CI com dados descartáveis criado.
-- [ ] Todos checks do último commit aprovados.
+- [x] Checks publicados para o commit `1d431fd` aprovados, incluindo a [integração com PostgreSQL 17 descartável](https://github.com/JoaoBuosi/buno-flow-commerce/actions/runs/43545975058).
 - [ ] Backup real produzido em volume criptografado e restauração conferida.
 - [ ] Preview com backend real conectado a banco **isolado** implantado e aprovado em celular.
 - [ ] Homologação humana, operacional e revisão independente; liberação comercial.

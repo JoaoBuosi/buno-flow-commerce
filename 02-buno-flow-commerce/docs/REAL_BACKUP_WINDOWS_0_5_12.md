@@ -68,6 +68,10 @@ Não reutilizar a conta administrativa do Supabase.
    PGDATABASE=flow_restore_*, PGUSER, PGSSLMODE=disable. **Não configure**
    FLOW_BACKUP_SOURCE_PGPASSWORD nem FLOW_RESTORE_PGPASSWORD previamente:
    o executor solicitará as senhas diretamente, lidas do seu cofre.
+   Se o certificado CA da origem estiver em um caminho próprio, configure
+   `FLOW_BACKUP_SOURCE_PGSSLROOTCERT` com o caminho completo do arquivo. O
+   pré-check verifica a existência do arquivo, e o PostgreSQL valida a cadeia
+   do certificado e o hostname durante a conexão com `verify-full`.
 4. Faça o pré-check sem backup:
 
 ~~~powershell

@@ -37,6 +37,9 @@ def inspect(config: dict[str, str], output: Path, repo: Path) -> list[str]:
         errors.append("Source must be separately approved and non-local")
     if config.get("FLOW_BACKUP_SOURCE_PGSSLMODE", "require") not in ("require", "verify-ca", "verify-full"):
         errors.append("Source must require TLS")
+    source_ca = config.get("FLOW_BACKUP_SOURCE_PGSSLROOTCERT", "")
+    if source_ca and not Path(source_ca).is_file():
+        errors.append("Source CA certificate must point to an existing file")
     if not config.get("FLOW_BACKUP_SOURCE_PGUSER"):
         errors.append("Source must use an approved read-only role")
     if config.get("FLOW_BACKUP_SOURCE_PGHOST") == config.get("FLOW_RESTORE_PGHOST") and config.get("FLOW_BACKUP_SOURCE_PGPORT") == port:
