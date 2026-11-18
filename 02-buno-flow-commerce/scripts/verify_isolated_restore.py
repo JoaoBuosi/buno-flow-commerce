@@ -93,6 +93,11 @@ def pg_env(prefix: str, default_ssl: str) -> dict[str, str]:
     env["PGSSLMODE"] = os.getenv(prefix + "PGSSLMODE", default_ssl)
     env["PGCONNECT_TIMEOUT"] = "12"
     if prefix == "FLOW_BACKUP_SOURCE_":
+        source_ca = os.getenv("FLOW_BACKUP_SOURCE_PGSSLROOTCERT")
+        if source_ca:
+            if not Path(source_ca).is_file():
+                raise ValueError("O certificado CA configurado para a origem precisa existir.")
+            env["PGSSLROOTCERT"] = source_ca
         # Force source sessions read-only independently of their login defaults.
         # The authorization query below also rejects roles with write privileges.
         env["PGOPTIONS"] = "-c default_transaction_read_only=on"

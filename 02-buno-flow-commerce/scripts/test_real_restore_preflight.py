@@ -53,6 +53,16 @@ class RealRestorePreflightTests(unittest.TestCase):
     def test_source_must_use_tls(self):
         self.assertTrue(self.evaluate(FLOW_BACKUP_SOURCE_PGSSLMODE="disable"))
 
+    def test_explicit_source_ca_must_exist(self):
+        certificate = self.safe / "source CA.crt"
+        config = {"FLOW_BACKUP_SOURCE_PGSSLROOTCERT": str(certificate)}
+        self.assertIn(
+            "Source CA certificate must point to an existing file",
+            self.evaluate(**config),
+        )
+        certificate.touch()
+        self.assertEqual(self.evaluate(**config), [])
+
     def test_source_cannot_be_local(self):
         self.assertTrue(self.evaluate(FLOW_BACKUP_SOURCE_PGHOST="localhost"))
 

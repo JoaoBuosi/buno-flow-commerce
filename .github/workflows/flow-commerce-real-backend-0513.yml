@@ -1,0 +1,102 @@
+name: Flow Commerce 0.5.13 - real backend with disposable PostgreSQL 17
+
+on:
+  pull_request:
+    paths:
+      - '02-buno-flow-commerce/**'
+      - '.github/workflows/flow-commerce-real-backend-0513.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gateway-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify edge gateway never forwards cookies or untrusted upstream traffic
+        run: node --test 02-buno-flow-commerce/web/qa/gateway.contract.test.mjs
+
+  real-postgres17:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: isolated-qa-only
+          POSTGRES_DB: commerce_0513
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d commerce_0513"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      CI: 'true'
+      COMMERCE_DISPOSABLE_BACKEND_QA: explicit-local-only
+      SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/commerce_0513?currentSchema=flow_commerce
+      SPRING_DATASOURCE_USERNAME: app
+      SPRING_DATASOURCE_PASSWORD: isolated-qa-only
+      COMMERCE_CORS_ORIGIN: http://127.0.0.1:5173
+      COMMERCE_MAIL_ENABLED: 'false'
+      COMMERCE_ML_PILOT_ENABLED: 'false'
+      COMMERCE_OWNER_MFA_REQUIRED: 'false'
+      COMMERCE_PILOT_ONLY: 'true'
+      COMMERCE_PILOT_INVITE_CODE: ci-private-test
+      VITE_API_URL: http://127.0.0.1:8080/api/v1
+      API_URL: http://127.0.0.1:8080/api/v1
+      E2E_PILOT_CODE: ci-private-test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: 02-buno-flow-commerce/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: 02-buno-flow-commerce/web/package-lock.json
+      - name: Build real Java API with Flyway migrations
+        working-directory: 02-buno-flow-commerce
+        run: mvn -B -DskipTests package
+      - name: Start API using only disposable PostgreSQL 17
+        working-directory: 02-buno-flow-commerce
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$COMMERCE_DISPOSABLE_BACKEND_QA" = "explicit-local-only"
+          test "$SPRING_DATASOURCE_URL" = "jdbc:postgresql://127.0.0.1:5432/commerce_0513?currentSchema=flow_commerce"
+          if [ -n "${DATABASE_URL:-}" ] || [ -n "${PGHOST:-}" ] || [ -n "${VITE_QA_PREVIEW:-}" ]; then
+            echo 'BLOCKED: external or synthetic environment was provided'
+            exit 1
+          fi
+          nohup java -jar target/buno-flow-commerce-0.2.0-SNAPSHOT.jar > /tmp/commerce-0513-isolated-api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/actuator/health | grep -q UP; then exit 0; fi
+            sleep 2
+          done
+          echo 'BLOCKED: disposable backend is unhealthy'
+          exit 1
+      - name: Install browser QA dependencies
+        working-directory: 02-buno-flow-commerce/web
+        run: npm ci --no-audit --no-fund
+      - name: Verify Google Chrome available
+        run: google-chrome --version
+      - name: Verify real API, persisted order, re-login and tenant isolation in browser
+        working-directory: 02-buno-flow-commerce/web
+        run: npm run test:e2e -- real-backend-postgres17.e2e.spec.ts

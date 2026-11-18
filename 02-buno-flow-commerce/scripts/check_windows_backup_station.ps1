@@ -27,7 +27,20 @@ try {
         $resolved.StartsWith($repository + '\',[StringComparison]::OrdinalIgnoreCase)) {
         Block "Backup deve ser fora do repositório"
     }
+    # Resolve every parent directory: reject junctions/symlinks that could
+    # redirect a BitLocker-protected path onto an unencrypted/remote volume.
+    $node = Get-Item -LiteralPath $resolved -Force -ErrorAction Stop
+    while ($null -ne $node) {
+        if (($node.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            Block "Pasta do backup usa junction/symlink/reparse point: destino nao comprovado"
+        }
+        $node = $node.Parent
+    }
     $mount = [IO.Path]::GetPathRoot($resolved).TrimEnd('\')
+    $logical = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='$mount'" -ErrorAction Stop
+    if (-not $logical -or $logical.DriveType -notin @(2,3)) {
+        Block "Backup exige volume local fisico, nao unidade de rede"
+    }
     $volume = Get-BitLockerVolume -MountPoint $mount -ErrorAction Stop
     if (-not $volume -or
         $volume.ProtectionStatus.ToString() -ne 'On' -or
