@@ -20,11 +20,12 @@ public class CommerceController {
   private final StoreProfileService storeProfiles;
   private final OrderExportService exports;
   private final PasswordResetService resets;
+  private final VerifiedCommandGuard verifyGuard;
   // Do not disclose this code in the frontend bundle or logs.
   @Value("${commerce.pilot-invite-code:}") private String pilotInviteCode;
   @Value("${commerce.pilot-only:false}") private boolean pilotOnly;
 
-  public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports,DemandInsights insights,StoreProfileService storeProfiles,OrderExportService exports,PasswordResetService resets){this.auth=auth;this.orders=orders;this.imports=imports;this.insights=insights;this.storeProfiles=storeProfiles;this.exports=exports;this.resets=resets;}
+  public CommerceController(AuthService auth,OrderStore orders,OrderImportService imports,DemandInsights insights,StoreProfileService storeProfiles,OrderExportService exports,PasswordResetService resets,VerifiedCommandGuard verifyGuard){this.auth=auth;this.orders=orders;this.imports=imports;this.insights=insights;this.storeProfiles=storeProfiles;this.exports=exports;this.resets=resets;this.verifyGuard=verifyGuard;}
   public record Register(String email,String password,String storeName){}
   public record Login(String email,String password){}
   @PostMapping("/auth/register")
@@ -139,9 +140,19 @@ public class CommerceController {
   @GetMapping("/orders/{id}/history")
   public List<Map<String,Object>> history(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,@PathVariable UUID id){return orders.history(who(token,store),id);}
   @PatchMapping("/orders/{id}/status")
-  public Map<String,Object> change(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,@PathVariable UUID id,@RequestBody OrderStore.ChangeStatus change){
+  public Map<String,Object> change(@RequestHeader("Authorization")String token,
+      @RequestHeader("X-Store-Id")String store,@PathVariable UUID id,
+      @RequestBody OrderStore.ChangeStatus change,
+      @RequestHeader(value="X-Buno-Verify-Operation-Id",required=false)String operation,
+      @RequestHeader(value="X-Buno-Verify-Expires",required=false)String expires,
+      @RequestHeader(value="X-Buno-Verify-Expected-Version",required=false)String version,
+      @RequestHeader(value="X-Buno-Verify-Signature",required=false)String signature){
     if(change==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-    return orders.transition(who(token,store),id,change.status(),null);
+    AuthService.Session session=who(token,store);
+    var proof=verifyGuard.authorize(session.storeId(),id,change.status(),
+                                    operation,expires,version,signature);
+    if(proof!=null) return orders.verifiedTransition(session,id,proof.expectedVersion(),proof.operationId());
+    return orders.transition(session,id,change.status(),null);
   }
   @PostMapping("/orders/{id}/cancel")
   public Map<String,Object> cancel(@RequestHeader("Authorization")String token,@RequestHeader("X-Store-Id")String store,@PathVariable UUID id,@RequestBody OrderStore.Cancel cancel){

@@ -88,7 +88,7 @@ public class OrderStore {
   }
   public List<Map<String,Object>> history(AuthService.Session user,UUID id){
     detail(user,id);
-    return db.queryForList("SELECT actor_id,action,old_status,new_status,detail,occurred_at FROM order_events WHERE order_id=? AND store_id=? ORDER BY occurred_at DESC",id,user.storeId());
+    return db.queryForList("SELECT actor_id,action,old_status,new_status,detail,occurred_at,operation_id FROM order_events WHERE order_id=? AND store_id=? ORDER BY occurred_at DESC",id,user.storeId());
   }
   @Transactional
   public Map<String,Object> transition(AuthService.Session user,UUID id,String target,String reason){
@@ -108,6 +108,38 @@ public class OrderStore {
     }
     return detail(user,id);
   }
+  /**
+   * The HMAC is checked by VerifiedCommandGuard at the controller boundary.
+   * Row locks, a version precondition and an operation_id unique constraint
+   * are checked in the SAME PostgreSQL transaction as the status mutation.
+   */
+  @Transactional
+  public Map<String,Object> verifiedTransition(AuthService.Session user,UUID id,long expectedVersion,UUID operationId){
+    var rows=db.queryForList("SELECT status,version FROM orders WHERE id=? AND store_id=? FOR UPDATE",
+                             id,user.storeId());
+    if(rows.isEmpty()) throw notFound();
+    String old=(String)rows.get(0).get("status");
+    long version=((Number)rows.get(0).get("version")).longValue();
+    if(!"PAID".equals(old) || version!=expectedVersion)
+      throw new ResponseStatusException(HttpStatus.CONFLICT,"Verify precondition failed");
+    Integer count=db.queryForObject("SELECT count(*) FROM verify_operations WHERE operation_id=?",
+                                    Integer.class,operationId);
+    if(count!=null && count>0)
+      throw new ResponseStatusException(HttpStatus.CONFLICT,"Verify operation already consumed");
+    try {
+      db.update("INSERT INTO verify_operations(operation_id,store_id,order_id,expected_version) VALUES(?,?,?,?)",
+                operationId,user.storeId(),id,expectedVersion);
+    } catch(org.springframework.dao.DuplicateKeyException exc) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,"Verify operation already consumed");
+    }
+    int updated=db.update("UPDATE orders SET status='PROCESSING',updated_at=now(),version=version+1 WHERE id=? AND store_id=? AND status='PAID' AND version=?",
+                          id,user.storeId(),expectedVersion);
+    if(updated!=1)throw new ResponseStatusException(HttpStatus.CONFLICT,"Verify concurrent update");
+    db.update("INSERT INTO order_events(id,order_id,store_id,actor_id,action,old_status,new_status,detail,operation_id) VALUES(?,?,?,?,?,?,?,?,?)",
+              UUID.randomUUID(),id,user.storeId(),user.userId(),"STATUS_CHANGED","PAID","PROCESSING",null,operationId);
+    return detail(user,id);
+  }
+
   private void event(AuthService.Session user,UUID order,String action,String previous,String next,String detail){
     db.update("INSERT INTO order_events(id,order_id,store_id,actor_id,action,old_status,new_status,detail) VALUES(?,?,?,?,?,?,?,?)",
       UUID.randomUUID(),order,user.storeId(),user.userId(),action,previous,next,detail);
