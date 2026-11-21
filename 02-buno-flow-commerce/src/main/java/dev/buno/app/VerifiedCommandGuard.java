@@ -38,7 +38,10 @@ public final class VerifiedCommandGuard {
       if(operation==null || !operation.matches("op_[0-9a-f]{32}") ||
          signature==null || !signature.matches("[0-9a-f]{64}"))
         throw new IllegalArgumentException("proof format");
-      UUID op=UUID.fromString(operation.substring(3));
+      String compact=operation.substring(3);
+      UUID op=UUID.fromString(compact.substring(0,8)+"-"+compact.substring(8,12)+"-"+
+                              compact.substring(12,16)+"-"+compact.substring(16,20)+"-"+
+                              compact.substring(20));
       long expires=Long.parseLong(expiresText);
       long version=Long.parseLong(versionText);
       long now=Instant.now().getEpochSecond();
