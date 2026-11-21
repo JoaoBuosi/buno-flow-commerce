@@ -14,7 +14,7 @@ class VerifiedCommandGuardTest {
 
   @Test void hmacMatchesPythonCanonicalVector() {
     String message=VerifiedCommandGuard.message(store,order,operation,1770000000L,2);
-    String sig=VerifiedCommandGuard.sign(secret,message);
+    String sig=VerifiedCommandGuard.sign("integration-only-verify-secret-12345678",message);
     // Same canonical bytes asserted by Buno Verify's Python test suite.
     assertEquals("fae268948a67786bc8236449fe45b485280c454f9de98a1b18f988c8bfad3131",sig);
   }
