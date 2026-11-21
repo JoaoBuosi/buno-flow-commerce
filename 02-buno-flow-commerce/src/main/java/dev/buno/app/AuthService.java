@@ -48,7 +48,8 @@ public class AuthService {
   @Transactional
   public Object login(String email, String password) {
     if(email == null || password == null) throw unauth();
-    var users=db.queryForList("SELECT id,password_hash FROM users WHERE email=?",email.trim().toLowerCase(java.util.Locale.ROOT));
+    var users=db.queryForList("SELECT id,password_hash FROM users WHERE email=? AND is_service_account=false",
+        email.trim().toLowerCase(java.util.Locale.ROOT));
     if(users.size()!=1 || !passwords.matches(password,(String)users.get(0).get("password_hash"))) throw unauth();
     UUID uid=(UUID) users.get(0).get("id");
     var memberships=db.queryForList("SELECT store_id,role FROM memberships WHERE user_id=? ORDER BY role",uid);
@@ -82,6 +83,7 @@ public class AuthService {
       var service=db.queryForList("""
         SELECT v.user_id FROM verify_service_credentials v
         JOIN memberships m ON m.store_id=v.store_id AND m.user_id=v.user_id
+        JOIN users u ON u.id=v.user_id AND u.is_service_account=true
         WHERE v.token_hash=? AND v.store_id=? AND v.scope='ORDER_PROCESSING_ONLY'
           AND v.expires_at>now() AND v.revoked_at IS NULL
         """, hash(token),store);

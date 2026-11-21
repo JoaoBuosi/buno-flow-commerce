@@ -67,12 +67,18 @@ class VerifyGatedOrderIntegrationTest {
       .header("X-Store-Id",u.store())).andExpect(status().isOk()).andReturn();
     UUID user=UUID.fromString(mapper.readTree(me.getResponse().getContentAsString())
                                .get("userId").asText());
+    UUID technicalUser=UUID.randomUUID();
+    db.update("INSERT INTO users(id,email,password_hash,is_service_account) VALUES (?,?,?,true)",
+      technicalUser,"verify-service-"+technicalUser+"@internal.invalid","!login-disabled!");
+    db.update("INSERT INTO memberships(store_id,user_id,role) VALUES (?,?,'STAFF')",
+      UUID.fromString(u.store()),technicalUser);
     db.update("INSERT INTO verify_service_credentials(token_hash,store_id,user_id,scope,expires_at) "+
       "VALUES(?,?,?,'ORDER_PROCESSING_ONLY',now()+interval '10 minutes')",
-      tokenHash,UUID.fromString(u.store()),user);
+      tokenHash,UUID.fromString(u.store()),technicalUser);
     mvc.perform(get("/api/v1/me").header("Authorization","Bearer "+svcToken)
       .header("X-Store-Id",u.store())).andExpect(status().isOk())
-      .andExpect(jsonPath("$.role").value("VERIFY_SERVICE"));
+      .andExpect(jsonPath("$.role").value("VERIFY_SERVICE"))
+      .andExpect(jsonPath("$.userId").value(technicalUser.toString()));
     mvc.perform(post("/api/v1/orders").header("Authorization","Bearer "+svcToken)
       .header("X-Store-Id",u.store()).contentType(MediaType.APPLICATION_JSON)
       .content("{\"customer\":\"forbidden\"}")).andExpect(status().isForbidden());

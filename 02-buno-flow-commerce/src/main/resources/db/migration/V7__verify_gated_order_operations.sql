@@ -21,3 +21,6 @@ CREATE TABLE verify_service_credentials (
   revoked_at TIMESTAMPTZ
 );
 CREATE INDEX ix_verify_service_credentials_store ON verify_service_credentials(store_id,expires_at);
+
+-- A dedicated Verify technical user has no interactive login capability.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_service_account BOOLEAN NOT NULL DEFAULT false;
