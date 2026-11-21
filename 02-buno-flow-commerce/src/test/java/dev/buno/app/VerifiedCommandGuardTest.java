@@ -12,6 +12,13 @@ class VerifiedCommandGuardTest {
   private final UUID order=UUID.fromString("22222222-2222-4222-8222-222222222222");
   private final String operation="op_33333333333343338333333333333333";
 
+  @Test void hmacMatchesPythonCanonicalVector() {
+    String message=VerifiedCommandGuard.message(store,order,operation,1770000000L,2);
+    String sig=VerifiedCommandGuard.sign(secret,message);
+    // Same canonical bytes asserted by Buno Verify's Python test suite.
+    assertEquals("fae268948a67786bc8236449fe45b485280c454f9de98a1b18f988c8bfad3131",sig);
+  }
+
   @Test void disabledGateAllowsLegacyFlow() {
     var guard=new VerifiedCommandGuard(false,"");
     assertNull(guard.authorize(store,order,"PROCESSING",null,null,null,null));
