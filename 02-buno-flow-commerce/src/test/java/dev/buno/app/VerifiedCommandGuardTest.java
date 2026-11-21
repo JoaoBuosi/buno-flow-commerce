@@ -28,7 +28,10 @@ class VerifiedCommandGuardTest {
       VerifiedCommandGuard.message(store,order,operation,expires,2));
     var proof=guard.authorize(store,order,"PROCESSING",operation,Long.toString(expires),"2",sig);
     assertEquals(2,proof.expectedVersion());
-    assertEquals(UUID.fromString(operation.substring(3)),proof.operationId());
+    String id=operation.substring(3);
+    assertEquals(UUID.fromString(id.substring(0,8)+"-"+id.substring(8,12)+"-"+
+      id.substring(12,16)+"-"+id.substring(16,20)+"-"+id.substring(20)),
+      proof.operationId());
     assertEquals(403,assertThrows(ResponseStatusException.class,
       ()->guard.authorize(UUID.randomUUID(),order,"PROCESSING",operation,Long.toString(expires),"2",sig)).getStatusCode().value());
     assertEquals(403,assertThrows(ResponseStatusException.class,
