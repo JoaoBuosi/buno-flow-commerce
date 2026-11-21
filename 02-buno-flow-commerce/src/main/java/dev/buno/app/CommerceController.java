@@ -149,9 +149,15 @@ public class CommerceController {
       @RequestHeader(value="X-Buno-Verify-Signature",required=false)String signature){
     if(change==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
     AuthService.Session session=who(token,store);
+    if("VERIFY_SERVICE".equals(session.role()) && !"PROCESSING".equals(change.status()))
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Verify service scope violation");
     var proof=verifyGuard.authorize(session.storeId(),id,change.status(),
                                     operation,expires,version,signature);
-    if(proof!=null) return orders.verifiedTransition(session,id,proof.expectedVersion(),proof.operationId());
+    if(proof!=null) {
+      if(!"VERIFY_SERVICE".equals(session.role()))
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Verify service identity required");
+      return orders.verifiedTransition(session,id,proof.expectedVersion(),proof.operationId());
+    }
     return orders.transition(session,id,change.status(),null);
   }
   @PostMapping("/orders/{id}/cancel")

@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -21,6 +22,7 @@ public class AuthService {
   private final BCryptPasswordEncoder passwords = new BCryptPasswordEncoder(12);
   private final SecureRandom random = new SecureRandom();
   private final OwnerMfaService mfa;
+  @Value("${commerce.verify.required:false}") private boolean verifyGateRequired;
   public AuthService(JdbcTemplate db, OwnerMfaService mfa) { this.db = db; this.mfa=mfa; }
   public record Session(UUID userId, UUID storeId, String email, String role) {}
   public record Token(String accessToken, UUID storeId, String role) {}
@@ -73,7 +75,20 @@ public class AuthService {
     var matches=db.queryForList(
       "SELECT u.id AS user_id,u.email,m.role,s.mfa_verified FROM user_sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>now() AND m.store_id=?",
       hash(token),store);
-    if(matches.size()!=1) throw unauth();
+    if(matches.size()!=1) {
+      if(!verifyGateRequired) throw unauth();
+      // A service token is bound to exactly one store, one linked technical user
+      // and the ORDER_PROCESSING_ONLY scope; its HTTP allowlist is filtered separately.
+      var service=db.queryForList("""
+        SELECT v.user_id FROM verify_service_credentials v
+        JOIN memberships m ON m.store_id=v.store_id AND m.user_id=v.user_id
+        WHERE v.token_hash=? AND v.store_id=? AND v.scope='ORDER_PROCESSING_ONLY'
+          AND v.expires_at>now() AND v.revoked_at IS NULL
+        """, hash(token),store);
+      if(service.size()!=1) throw unauth();
+      return new Session((UUID)service.get(0).get("user_id"),store,
+                         "verify-service@internal.invalid","VERIFY_SERVICE");
+    }
     Map<String,Object> m=matches.get(0);
     if(mfa.requiredFor((String)m.get("email")) && "OWNER".equals(m.get("role")) &&
        !Boolean.TRUE.equals(m.get("mfa_verified")))throw unauth();

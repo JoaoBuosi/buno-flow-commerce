@@ -30,3 +30,8 @@ without a valid short-lived HMAC-SHA256 proof generated inside Buno Verify.
 - The automated tests use a CI-only secret, never production credentials.
 
 Use the secret only in protected CI/QA server environments. Never embed it in the React bundle, a notebook, or an agent prompt.
+
+### Dedicated service identity (QA)
+The Verify gateway must use an opaque 64-character hex **service** bearer, not a browser/OWNER bearer. The service token is generated from a CSPRNG outside the app; only its SHA-256 hash is provisioned in `verify_service_credentials`, bound to one store, a technical account user, expiration and `ORDER_PROCESSING_ONLY`. Under `COMMERCE_VERIFY_REQUIRED=true`, service credentials are accepted by AuthService only when still valid, and VerifyServiceCredentialFilter restricts them to `GET /me`, `GET /orders/{id}`, `GET /orders/{id}/history` and `PATCH /orders/{id}/status`. A service bearer cannot directly create/cancel/export orders, and the PATCH route requires a valid signed proof and PROCESSING target. Normal browser sessions cannot apply signed protected transitions.
+
+No migration or service bearer has been provisioned in Railway. CI issues short-lived disposable credentials only in its private PostgreSQL runner. Revoking a bearer means setting `revoked_at` or deleting its hash; never reveal real tokens in GitHub, browser code, or chat.

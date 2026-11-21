@@ -10,3 +10,14 @@ CREATE TABLE verify_operations (
   consumed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX ix_verify_operations_tenant ON verify_operations(store_id,order_id);
+
+-- Scoped service tokens are provisioned out-of-band, and only their hashes are stored.
+CREATE TABLE verify_service_credentials (
+  token_hash CHAR(64) PRIMARY KEY,
+  store_id UUID NOT NULL REFERENCES stores(id),
+  user_id UUID NOT NULL REFERENCES users(id),
+  scope VARCHAR(40) NOT NULL CHECK (scope='ORDER_PROCESSING_ONLY'),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ
+);
+CREATE INDEX ix_verify_service_credentials_store ON verify_service_credentials(store_id,expires_at);
